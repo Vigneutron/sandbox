@@ -51,6 +51,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // localStorage is client-only; hydrating here (not in the initializer)
+    // keeps server and first client render identical.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setState(loadState());
     setReady(true);
   }, []);
