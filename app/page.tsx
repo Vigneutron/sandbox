@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useApp } from "@/lib/store";
 import { FREE_GOAL_LIMIT, GoalStructure } from "@/lib/types";
 import { AdBanner } from "@/components/AdBanner";
-import { isDueOn, todayKey } from "@/lib/dates";
+import { formatDay, isDueOn, todayKey } from "@/lib/dates";
 import { currentStreak } from "@/lib/habits";
 
 const STRUCTURES: { key: GoalStructure; label: string; icon: string; desc: string }[] = [
@@ -216,6 +216,17 @@ export default function DashboardPage() {
                       ? "No milestones yet"
                       : `${done}/${milestones.length}`}
                   </span>
+                  {goal.deadline && (
+                    <span
+                      className={`shrink-0 text-xs font-medium ${
+                        goal.deadline < todayKey() && pct < 100
+                          ? "text-red-400"
+                          : "text-gold-300"
+                      }`}
+                    >
+                      ◆ {formatDay(goal.deadline)}
+                    </span>
+                  )}
                 </div>
               </Link>
               <button

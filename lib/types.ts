@@ -18,6 +18,8 @@ export interface Goal {
   days: number[] | null;
   /** habit goals: stacking cue, shown as "After {cue}, I will {title}" */
   cue: string;
+  /** optional target date as a YYYY-MM-DD key */
+  deadline: string | null;
   createdAt: string;
 }
 

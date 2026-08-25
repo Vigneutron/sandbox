@@ -22,3 +22,12 @@ export const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export function isDueOn(days: number[], d: Date): boolean {
   return days.includes(d.getDay());
 }
+
+/** "Sep 30" style label for a YYYY-MM-DD key */
+export function formatDay(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}

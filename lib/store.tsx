@@ -40,6 +40,7 @@ function loadLocal(): AppState {
         structure: g.structure ?? "linear",
         days: g.days ?? null,
         cue: g.cue ?? "",
+        deadline: g.deadline ?? null,
       })),
       milestones: (parsed.milestones ?? []).map((m) => ({
         ...m,
@@ -78,6 +79,8 @@ interface AppContextValue {
   toggleHabitToday: (goalId: string) => void;
   /** habit goals: update schedule and stacking cue */
   updateHabitConfig: (goalId: string, days: number[], cue: string) => void;
+  /** set or clear a goal's target date (YYYY-MM-DD or null) */
+  updateGoalDeadline: (goalId: string, deadline: string | null) => void;
   toggleMilestone: (milestoneId: string) => void;
   deleteMilestone: (milestoneId: string) => void;
   /** copies one of the user's goals into the public template library */
@@ -165,6 +168,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               structure: goal.structure,
               days: goal.days,
               cue: goal.cue,
+              deadline: goal.deadline,
               created_at: goal.createdAt,
             }))
           )
@@ -209,6 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             structure: r.structure ?? "linear",
             days: r.days ?? null,
             cue: r.cue ?? "",
+            deadline: r.deadline ?? null,
             createdAt: r.created_at,
           })),
           milestones: m.data.map((r) => ({
@@ -254,6 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         structure,
         days: structure === "habit" ? [0, 1, 2, 3, 4, 5, 6] : null,
         cue: "",
+        deadline: null,
         createdAt: new Date().toISOString(),
       };
       setState((s) => ({ ...s, goals: [...s.goals, goal] }));
@@ -268,6 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             structure: goal.structure,
             days: goal.days,
             cue: goal.cue,
+            deadline: goal.deadline,
             created_at: goal.createdAt,
           })
           .then(logError("add goal"));
@@ -349,6 +356,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         structure,
         days: null,
         cue: "",
+        deadline: null,
         createdAt: nowIso,
       };
       goals.push(goal);
@@ -421,6 +429,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             structure: g.structure,
             days: g.days,
             cue: g.cue,
+            deadline: g.deadline,
             created_at: g.createdAt,
           }))
         )
@@ -551,6 +560,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         structure,
         days: structure === "habit" ? [0, 1, 2, 3, 4, 5, 6] : null,
         cue: "",
+        deadline: null,
         createdAt: nowIso,
       };
       const idMap = new Map(nodes.map((n) => [n.id, crypto.randomUUID()]));
@@ -579,6 +589,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             structure: goal.structure,
             days: goal.days,
             cue: goal.cue,
+            deadline: goal.deadline,
             created_at: goal.createdAt,
           })
           .then(({ error }) => {
@@ -660,6 +671,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const updateGoalDeadline = useCallback(
+    (goalId: string, deadline: string | null) => {
+      setState((s) => ({
+        ...s,
+        goals: s.goals.map((g) => (g.id === goalId ? { ...g, deadline } : g)),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("goals")
+          .update({ deadline })
+          .eq("id", goalId)
+          .then(logError("update deadline"));
+      }
+    },
+    [user]
+  );
+
   const refreshPro = useCallback(async () => {
     const sb = getSupabase();
     if (!sb || !user) return;
@@ -725,6 +753,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addSampleGoals,
         toggleHabitToday,
         updateHabitConfig,
+        updateGoalDeadline,
         toggleMilestone,
         deleteMilestone,
         publishGoal,

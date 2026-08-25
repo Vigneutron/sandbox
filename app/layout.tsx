@@ -36,6 +36,9 @@ export default function RootLayout({
                 <Link href="/" className="hover:underline">
                   Goals
                 </Link>
+                <Link href="/calendar" className="hover:underline">
+                  Calendar
+                </Link>
                 <Link href="/library" className="hover:underline">
                   Library
                 </Link>

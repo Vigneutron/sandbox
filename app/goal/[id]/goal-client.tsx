@@ -548,7 +548,7 @@ function HabitView({ goal }: { goal: Goal }) {
 
 export default function GoalClient() {
   const { id } = useParams<{ id: string }>();
-  const { state, ready, user, publishGoal } = useApp();
+  const { state, ready, user, publishGoal, updateGoalDeadline } = useApp();
   const [publishState, setPublishState] = useState<string | null>(null);
 
   if (!ready) return null;
@@ -592,6 +592,29 @@ export default function GoalClient() {
           <span className="shrink-0 text-xs text-gray-400">
             {done}/{milestones.length}
           </span>
+        </div>
+      )}
+
+      {goal.structure !== "habit" && (
+        <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
+          <label htmlFor="deadline">Deadline:</label>
+          <input
+            id="deadline"
+            type="date"
+            value={goal.deadline ?? ""}
+            onChange={(e) => updateGoalDeadline(goal.id, e.target.value || null)}
+            className="rounded-md border border-gray-600 bg-navy-900 px-2 py-1 text-sm text-gray-100 outline-none [color-scheme:dark]"
+          />
+          {goal.deadline ? (
+            <button
+              onClick={() => updateGoalDeadline(goal.id, null)}
+              className="underline hover:text-gray-200"
+            >
+              clear
+            </button>
+          ) : (
+            <span className="text-gray-500">optional</span>
+          )}
         </div>
       )}
 
