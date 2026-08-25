@@ -8,6 +8,8 @@ import { getSupabase } from "@/lib/supabase";
 
 const PERKS = [
   "Unlimited goals and habits",
+  "⚙ Machine goals — drag-and-drop process maps with parallel paths, conditional unlocks, and daily loops",
+  "⚡ Goal hooks — a step in one goal auto-completes when a step in another finishes",
   "No ads, ever",
   "Priority access to new features (reminders, insights, data export)",
 ];

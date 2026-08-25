@@ -13,6 +13,7 @@ import {
   AppState,
   Goal,
   GoalStructure,
+  MachineEdge,
   Milestone,
   FREE_GOAL_LIMIT,
 } from "./types";
@@ -24,6 +25,7 @@ const STORAGE_KEY = "goal-goal-gadget-v1";
 const EMPTY: AppState = {
   goals: [],
   milestones: [],
+  edges: [],
   habitCompletions: {},
   pro: false,
 };
@@ -45,7 +47,14 @@ function loadLocal(): AppState {
       milestones: (parsed.milestones ?? []).map((m) => ({
         ...m,
         parentId: m.parentId ?? null,
+        x: m.x ?? null,
+        y: m.y ?? null,
+        loopTarget: m.loopTarget ?? null,
+        loopCount: m.loopCount ?? 0,
+        loopLast: m.loopLast ?? null,
+        hookSourceId: m.hookSourceId ?? null,
       })),
+      edges: parsed.edges ?? [],
       habitCompletions: parsed.habitCompletions ?? {},
       pro: parsed.pro ?? false,
     };
@@ -81,6 +90,19 @@ interface AppContextValue {
   updateHabitConfig: (goalId: string, days: number[], cue: string) => void;
   /** set or clear a goal's target date (YYYY-MM-DD or null) */
   updateGoalDeadline: (goalId: string, deadline: string | null) => void;
+  /** machine goals: add a step at a canvas position */
+  addMachineNode: (goalId: string, title: string, x: number, y: number) => void;
+  /** machine goals: persist a dragged step's position */
+  moveNode: (milestoneId: string, x: number, y: number) => void;
+  /** machine goals: connect two steps with a directed path */
+  addEdge: (goalId: string, fromId: string, toId: string) => void;
+  deleteEdge: (edgeId: string) => void;
+  /** make a step a loop needing `target` reps (null clears the loop) */
+  setLoop: (milestoneId: string, target: number | null) => void;
+  /** count one rep on a loop step (at most one per day) */
+  tapLoop: (milestoneId: string) => void;
+  /** Pro hooks: auto-complete this step when another one completes */
+  setHook: (milestoneId: string, sourceId: string | null) => void;
   toggleMilestone: (milestoneId: string) => void;
   deleteMilestone: (milestoneId: string) => void;
   /** copies one of the user's goals into the public template library */
@@ -142,9 +164,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     (async () => {
-      const [g, m, hc, p] = await Promise.all([
+      const [g, m, e, hc, p] = await Promise.all([
         sb.from("goals").select("*").order("created_at"),
         sb.from("milestones").select("*").order("position"),
+        sb.from("machine_edges").select("*"),
         sb.from("habit_completions").select("goal_id,date"),
         sb.from("profiles").select("pro").maybeSingle(),
       ]);
@@ -184,11 +207,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 parent_id: ms.parentId,
                 title: ms.title,
                 position: ms.position,
+                pos_x: ms.x,
+                pos_y: ms.y,
+                loop_target: ms.loopTarget,
+                loop_count: ms.loopCount,
+                loop_last: ms.loopLast,
+                hook_source_id: ms.hookSourceId,
                 completed_at: ms.completedAt,
                 created_at: ms.createdAt,
               }))
             )
             .then(logError("migrate milestones"));
+          if (local.edges.length > 0) {
+            await sb
+              .from("machine_edges")
+              .insert(
+                local.edges.map((edge) => ({
+                  id: edge.id,
+                  user_id: user.id,
+                  goal_id: edge.goalId,
+                  from_id: edge.fromId,
+                  to_id: edge.toId,
+                }))
+              )
+              .then(logError("migrate edges"));
+          }
         }
         const completionRows = Object.entries(local.habitCompletions).flatMap(
           ([goalId, dates]) =>
@@ -222,8 +265,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
             parentId: r.parent_id ?? null,
             title: r.title,
             position: r.position,
+            x: r.pos_x ?? null,
+            y: r.pos_y ?? null,
+            loopTarget: r.loop_target ?? null,
+            loopCount: r.loop_count ?? 0,
+            loopLast: r.loop_last ?? null,
+            hookSourceId: r.hook_source_id ?? null,
             completedAt: r.completed_at,
             createdAt: r.created_at,
+          })),
+          edges: ((e.data ?? []) as {
+            id: string;
+            goal_id: string;
+            from_id: string;
+            to_id: string;
+          }[]).map((r) => ({
+            id: r.id,
+            goalId: r.goal_id,
+            fromId: r.from_id,
+            toId: r.to_id,
           })),
           habitCompletions: (
             (hc.data ?? []) as { goal_id: string; date: string }[]
@@ -293,6 +353,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...s,
           goals: s.goals.filter((g) => g.id !== goalId),
           milestones: s.milestones.filter((m) => m.goalId !== goalId),
+          edges: s.edges.filter((edge) => edge.goalId !== goalId),
           habitCompletions,
         };
       });
@@ -320,6 +381,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         parentId,
         title: title.trim(),
         position,
+        x: null,
+        y: null,
+        loopTarget: null,
+        loopCount: 0,
+        loopLast: null,
+        hookSourceId: null,
         completedAt: null,
         createdAt: new Date().toISOString(),
       };
@@ -375,6 +442,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         parentId: parent?.id ?? null,
         title,
         position,
+        x: null,
+        y: null,
+        loopTarget: null,
+        loopCount: 0,
+        loopLast: null,
+        hookSourceId: null,
         completedAt: done ? nowIso : null,
         createdAt: nowIso,
       };
@@ -456,26 +529,242 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  const toggleMilestone = useCallback(
+  // completes a milestone plus everything hooked to it, transitively
+  const completeCascade = useCallback(
     (milestoneId: string) => {
-      const target = state.milestones.find((m) => m.id === milestoneId);
-      if (!target) return;
-      const completedAt = target.completedAt ? null : new Date().toISOString();
+      const now = new Date().toISOString();
+      const completedIds = new Set<string>([milestoneId]);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const m of state.milestones) {
+          if (
+            m.hookSourceId &&
+            completedIds.has(m.hookSourceId) &&
+            !m.completedAt &&
+            !completedIds.has(m.id)
+          ) {
+            completedIds.add(m.id);
+            grew = true;
+          }
+        }
+      }
       setState((s) => ({
         ...s,
         milestones: s.milestones.map((m) =>
-          m.id === milestoneId ? { ...m, completedAt } : m
+          completedIds.has(m.id) && !m.completedAt
+            ? { ...m, completedAt: now }
+            : m
         ),
       }));
       const sb = getSupabase();
       if (sb && user) {
         sb.from("milestones")
-          .update({ completed_at: completedAt })
+          .update({ completed_at: now })
+          .in("id", [...completedIds])
+          .then(logError("complete milestones"));
+      }
+    },
+    [user, state.milestones]
+  );
+
+  const toggleMilestone = useCallback(
+    (milestoneId: string) => {
+      const target = state.milestones.find((m) => m.id === milestoneId);
+      if (!target) return;
+      if (!target.completedAt) {
+        completeCascade(milestoneId);
+        return;
+      }
+      setState((s) => ({
+        ...s,
+        milestones: s.milestones.map((m) =>
+          m.id === milestoneId ? { ...m, completedAt: null } : m
+        ),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("milestones")
+          .update({ completed_at: null })
           .eq("id", milestoneId)
           .then(logError("toggle milestone"));
       }
     },
+    [user, state.milestones, completeCascade]
+  );
+
+  const addMachineNode = useCallback(
+    (goalId: string, title: string, x: number, y: number) => {
+      const position =
+        state.milestones.filter((m) => m.goalId === goalId).length + 1;
+      const milestone: Milestone = {
+        id: crypto.randomUUID(),
+        goalId,
+        parentId: null,
+        title: title.trim(),
+        position,
+        x,
+        y,
+        loopTarget: null,
+        loopCount: 0,
+        loopLast: null,
+        hookSourceId: null,
+        completedAt: null,
+        createdAt: new Date().toISOString(),
+      };
+      setState((s) => ({ ...s, milestones: [...s.milestones, milestone] }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("milestones")
+          .insert({
+            id: milestone.id,
+            user_id: user.id,
+            goal_id: goalId,
+            parent_id: null,
+            title: milestone.title,
+            position,
+            pos_x: x,
+            pos_y: y,
+            completed_at: null,
+            created_at: milestone.createdAt,
+          })
+          .then(logError("add machine node"));
+      }
+    },
     [user, state.milestones]
+  );
+
+  const moveNode = useCallback(
+    (milestoneId: string, x: number, y: number) => {
+      setState((s) => ({
+        ...s,
+        milestones: s.milestones.map((m) =>
+          m.id === milestoneId ? { ...m, x, y } : m
+        ),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("milestones")
+          .update({ pos_x: x, pos_y: y })
+          .eq("id", milestoneId)
+          .then(logError("move node"));
+      }
+    },
+    [user]
+  );
+
+  const addEdge = useCallback(
+    (goalId: string, fromId: string, toId: string) => {
+      if (fromId === toId) return;
+      if (
+        state.edges.some((e) => e.fromId === fromId && e.toId === toId)
+      )
+        return;
+      const edge: MachineEdge = {
+        id: crypto.randomUUID(),
+        goalId,
+        fromId,
+        toId,
+      };
+      setState((s) => ({ ...s, edges: [...s.edges, edge] }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("machine_edges")
+          .insert({
+            id: edge.id,
+            user_id: user.id,
+            goal_id: goalId,
+            from_id: fromId,
+            to_id: toId,
+          })
+          .then(logError("add edge"));
+      }
+    },
+    [user, state.edges]
+  );
+
+  const deleteEdge = useCallback(
+    (edgeId: string) => {
+      setState((s) => ({
+        ...s,
+        edges: s.edges.filter((e) => e.id !== edgeId),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("machine_edges")
+          .delete()
+          .eq("id", edgeId)
+          .then(logError("delete edge"));
+      }
+    },
+    [user]
+  );
+
+  const setLoop = useCallback(
+    (milestoneId: string, target: number | null) => {
+      setState((s) => ({
+        ...s,
+        milestones: s.milestones.map((m) =>
+          m.id === milestoneId ? { ...m, loopTarget: target } : m
+        ),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("milestones")
+          .update({ loop_target: target })
+          .eq("id", milestoneId)
+          .then(logError("set loop"));
+      }
+    },
+    [user]
+  );
+
+  const tapLoop = useCallback(
+    (milestoneId: string) => {
+      const target = state.milestones.find((m) => m.id === milestoneId);
+      if (!target || !target.loopTarget || target.completedAt) return;
+      const today = todayKey();
+      if (target.loopLast === today) return; // one rep per day
+      const count = target.loopCount + 1;
+      const finished = count >= target.loopTarget;
+      setState((s) => ({
+        ...s,
+        milestones: s.milestones.map((m) =>
+          m.id === milestoneId
+            ? { ...m, loopCount: count, loopLast: today }
+            : m
+        ),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("milestones")
+          .update({ loop_count: count, loop_last: today })
+          .eq("id", milestoneId)
+          .then(logError("tap loop"));
+      }
+      if (finished) completeCascade(milestoneId);
+    },
+    [user, state.milestones, completeCascade]
+  );
+
+  const setHook = useCallback(
+    (milestoneId: string, sourceId: string | null) => {
+      if (sourceId === milestoneId) return;
+      setState((s) => ({
+        ...s,
+        milestones: s.milestones.map((m) =>
+          m.id === milestoneId ? { ...m, hookSourceId: sourceId } : m
+        ),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("milestones")
+          .update({ hook_source_id: sourceId })
+          .eq("id", milestoneId)
+          .then(logError("set hook"));
+      }
+    },
+    [user]
   );
 
   const deleteMilestone = useCallback(
@@ -495,7 +784,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return {
           ...s,
-          milestones: s.milestones.filter((m) => !doomed.has(m.id)),
+          milestones: s.milestones
+            .filter((m) => !doomed.has(m.id))
+            .map((m) =>
+              m.hookSourceId && doomed.has(m.hookSourceId)
+                ? { ...m, hookSourceId: null }
+                : m
+            ),
+          edges: s.edges.filter(
+            (e) => !doomed.has(e.fromId) && !doomed.has(e.toId)
+          ),
         };
       });
       const sb = getSupabase();
@@ -515,8 +813,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!sb || !user) return "Sign in to publish to the library.";
       const goal = state.goals.find((g) => g.id === goalId);
       if (!goal) return "Goal not found.";
-      if (goal.structure === "habit")
-        return "Habit goals can't be published yet.";
+      if (goal.structure === "habit" || goal.structure === "machine")
+        return "This goal type can't be published yet.";
       const nodes = state.milestones.filter((m) => m.goalId === goalId);
       if (nodes.length === 0) return "Add some milestones before publishing.";
 
@@ -570,6 +868,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         parentId: n.parentId ? (idMap.get(n.parentId) ?? null) : null,
         title: n.title,
         position: n.position,
+        x: null,
+        y: null,
+        loopTarget: null,
+        loopCount: 0,
+        loopLast: null,
+        hookSourceId: null,
         completedAt: null,
         createdAt: nowIso,
       }));
@@ -754,6 +1058,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleHabitToday,
         updateHabitConfig,
         updateGoalDeadline,
+        addMachineNode,
+        moveNode,
+        addEdge,
+        deleteEdge,
+        setLoop,
+        tapLoop,
+        setHook,
         toggleMilestone,
         deleteMilestone,
         publishGoal,

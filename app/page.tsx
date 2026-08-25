@@ -33,12 +33,19 @@ const STRUCTURES: { key: GoalStructure; label: string; icon: string; desc: strin
     icon: "↻",
     desc: "Repeats on a weekly schedule — build a streak, and stack it after a routine you already have.",
   },
+  {
+    key: "machine",
+    label: "Machine 👑",
+    icon: "⚙",
+    desc: "Pro: a drag-and-drop process map — parallel paths (Plan A / Plan B), conditional unlocks, daily loops, and hooks into other goals.",
+  },
 ];
 
 function GoalForm() {
-  const { addGoal } = useApp();
+  const { addGoal, state } = useApp();
   const [title, setTitle] = useState("");
   const [structure, setStructure] = useState<GoalStructure>("linear");
+  const [proNotice, setProNotice] = useState(false);
 
   return (
     <form
@@ -46,8 +53,13 @@ function GoalForm() {
       onSubmit={(e) => {
         e.preventDefault();
         if (!title.trim()) return;
+        if (structure === "machine" && !state.pro) {
+          setProNotice(true);
+          return;
+        }
         addGoal(title, structure);
         setTitle("");
+        setProNotice(false);
       }}
     >
       <div className="flex items-center gap-2">
@@ -84,6 +96,15 @@ function GoalForm() {
       <p className="mt-1.5 text-xs text-gray-400">
         {STRUCTURES.find((s) => s.key === structure)?.desc}
       </p>
+      {proNotice && (
+        <p className="mt-2 rounded-md bg-navy-800 px-3 py-2 text-sm text-gold-300">
+          ⚙ Machine goals are a Pro feature.{" "}
+          <Link href="/upgrade" className="underline">
+            Go Pro for $3/mo
+          </Link>{" "}
+          to build one.
+        </p>
+      )}
     </form>
   );
 }

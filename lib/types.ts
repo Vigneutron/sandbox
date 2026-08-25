@@ -4,8 +4,9 @@
  * - pyramid: nested sub-goals under one root goal
  * - tree: like a game skill tree — completing a node unlocks its children
  * - habit: repeats on a weekly schedule with streaks; no milestones
+ * - machine: Pro — a free-form process graph with paths, loops, and hooks
  */
-export type GoalStructure = "linear" | "pyramid" | "tree" | "habit";
+export type GoalStructure = "linear" | "pyramid" | "tree" | "habit" | "machine";
 
 export interface Goal {
   id: string;
@@ -31,13 +32,32 @@ export interface Milestone {
   title: string;
   /** order among siblings, 1-based */
   position: number;
+  /** machine goals: free-form canvas position */
+  x: number | null;
+  y: number | null;
+  /** loop nodes complete after this many reps (max one per day); null = plain step */
+  loopTarget: number | null;
+  loopCount: number;
+  /** date key of the last counted rep, enforcing one per day */
+  loopLast: string | null;
+  /** Pro hooks: auto-completes when this other milestone completes */
+  hookSourceId: string | null;
   completedAt: string | null;
   createdAt: string;
+}
+
+/** machine goals: a directed path between two steps */
+export interface MachineEdge {
+  id: string;
+  goalId: string;
+  fromId: string;
+  toId: string;
 }
 
 export interface AppState {
   goals: Goal[];
   milestones: Milestone[];
+  edges: MachineEdge[];
   /** habit goalId -> completed dates as YYYY-MM-DD keys */
   habitCompletions: Record<string, string[]>;
   pro: boolean;

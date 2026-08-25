@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useApp } from "@/lib/store";
@@ -398,6 +398,7 @@ function GraphView({
               Delete
             </button>
           </div>
+          <HookEditor milestone={selected} />
           {branching && (
             <div className="mt-3">
               <MilestoneInput
@@ -544,6 +545,490 @@ function HabitView({ goal }: { goal: Goal }) {
   );
 }
 
+
+/* ---------- Machine (Pro): drag-and-drop process map ---------- */
+
+const M_W = 128;
+const M_H = 48;
+const CANVAS_W = 1000;
+const CANVAS_H = 760;
+
+function HookEditor({ milestone }: { milestone: Milestone }) {
+  const { state, setHook } = useApp();
+  const [goalId, setGoalId] = useState("");
+
+  if (!state.pro) {
+    return (
+      <p className="mt-3 border-t border-gray-700 pt-3 text-xs">
+        <Link href="/upgrade" className="text-gold-400 underline">
+          ⚡ Hook steps across goals with Pro
+        </Link>
+      </p>
+    );
+  }
+
+  const source = milestone.hookSourceId
+    ? state.milestones.find((m) => m.id === milestone.hookSourceId)
+    : null;
+  const sourceGoal = source
+    ? state.goals.find((g) => g.id === source.goalId)
+    : null;
+  const otherGoals = state.goals.filter(
+    (g) => g.id !== milestone.goalId && g.structure !== "habit"
+  );
+
+  return (
+    <div className="mt-3 border-t border-gray-700 pt-3 text-sm">
+      <p className="font-medium">⚡ Hook</p>
+      {source ? (
+        <p className="mt-1 text-gray-400">
+          Auto-completes when “{source.title}”
+          {sourceGoal && <> in {sourceGoal.identity}</>} is completed.{" "}
+          <button
+            onClick={() => setHook(milestone.id, null)}
+            className="underline hover:text-gray-200"
+          >
+            Remove
+          </button>
+        </p>
+      ) : otherGoals.length === 0 ? (
+        <p className="mt-1 text-xs text-gray-400">
+          Create another goal with steps to hook into.
+        </p>
+      ) : (
+        <div className="mt-1.5 flex flex-col gap-1.5">
+          <select
+            value={goalId}
+            onChange={(e) => setGoalId(e.target.value)}
+            className="rounded-md border border-gray-600 bg-navy-950 px-2 py-1.5 text-sm text-gray-100"
+          >
+            <option value="">Completes when… (pick a goal)</option>
+            {otherGoals.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.identity}
+              </option>
+            ))}
+          </select>
+          {goalId && (
+            <select
+              defaultValue=""
+              onChange={(e) => e.target.value && setHook(milestone.id, e.target.value)}
+              className="rounded-md border border-gray-600 bg-navy-950 px-2 py-1.5 text-sm text-gray-100"
+            >
+              <option value="">…this step is completed:</option>
+              {state.milestones
+                .filter((m) => m.goalId === goalId && m.id !== milestone.id)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.title}
+                  </option>
+                ))}
+            </select>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MachineView({ goal }: { goal: Goal }) {
+  const {
+    state,
+    addMachineNode,
+    moveNode,
+    addEdge,
+    deleteEdge,
+    setLoop,
+    tapLoop,
+    toggleMilestone,
+    deleteMilestone,
+  } = useApp();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [connectFrom, setConnectFrom] = useState<string | null>(null);
+  const [localPos, setLocalPos] = useState<Record<string, { x: number; y: number }>>({});
+  const drag = useRef<{ id: string; dx: number; dy: number; moved: boolean } | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  const nodes = state.milestones.filter((m) => m.goalId === goal.id);
+  const edges = state.edges.filter((e) => e.goalId === goal.id);
+  const byId = new Map(nodes.map((m) => [m.id, m]));
+
+  const posOf = (m: Milestone, i: number) => {
+    const local = localPos[m.id];
+    if (local) return local;
+    return {
+      x: m.x ?? 90 + (i % 3) * 160,
+      y: m.y ?? 70 + Math.floor(i / 3) * 110,
+    };
+  };
+  const positions = new Map(nodes.map((m, i) => [m.id, posOf(m, i)]));
+
+  const incoming = (id: string) => edges.filter((e) => e.toId === id);
+  const isLocked = (m: Milestone) => {
+    const inc = incoming(m.id);
+    if (inc.length === 0) return false;
+    return !inc.some((e) => byId.get(e.fromId)?.completedAt);
+  };
+
+  const svgPoint = (e: React.PointerEvent) => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const onNodePointerDown = (m: Milestone) => (e: React.PointerEvent) => {
+    const p = svgPoint(e);
+    const pos = positions.get(m.id)!;
+    drag.current = { id: m.id, dx: p.x - pos.x, dy: p.y - pos.y, moved: false };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!drag.current) return;
+    const p = svgPoint(e);
+    const x = Math.min(Math.max(p.x - drag.current.dx, M_W / 2), CANVAS_W - M_W / 2);
+    const y = Math.min(Math.max(p.y - drag.current.dy, M_H / 2), CANVAS_H - M_H / 2);
+    drag.current.moved = true;
+    setLocalPos((lp) => ({ ...lp, [drag.current!.id]: { x, y } }));
+  };
+  const onPointerUp = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    if (d.moved) {
+      const pos = localPos[d.id];
+      if (pos) moveNode(d.id, pos.x, pos.y);
+      return;
+    }
+    // a tap, not a drag
+    if (connectFrom && connectFrom !== d.id) {
+      addEdge(goal.id, connectFrom, d.id);
+      setConnectFrom(null);
+      return;
+    }
+    setSelectedEdgeId(null);
+    setSelectedId(selectedId === d.id ? null : d.id);
+  };
+
+  const selected = selectedId ? (byId.get(selectedId) ?? null) : null;
+  const selectedEdge = selectedEdgeId
+    ? (edges.find((e) => e.id === selectedEdgeId) ?? null)
+    : null;
+
+  const addStep = () => {
+    const title = prompt("Name this step:");
+    if (!title || !title.trim()) return;
+    const i = nodes.length;
+    addMachineNode(
+      goal.id,
+      title,
+      90 + (i % 3) * 160,
+      70 + Math.floor(i / 3) * 110
+    );
+  };
+
+  return (
+    <>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button
+          onClick={addStep}
+          className="rounded-lg bg-gold-500 px-3 py-1.5 text-sm font-medium text-ongold hover:bg-gold-400"
+        >
+          ＋ Step
+        </button>
+        <button
+          onClick={() => {
+            setConnectFrom(connectFrom ? null : (selectedId ?? ""));
+            if (!selectedId) setConnectFrom(null);
+          }}
+          disabled={!selectedId && !connectFrom}
+          className={`rounded-lg border px-3 py-1.5 text-sm font-medium disabled:opacity-40 ${
+            connectFrom
+              ? "border-gold-500 text-gold-400"
+              : "border-gray-600 hover:bg-navy-800"
+          }`}
+        >
+          {connectFrom ? "Tap a target step…" : "→ Connect from selected"}
+        </button>
+      </div>
+
+      <div className="mt-3 overflow-auto rounded-xl border border-gray-700 bg-navy-900">
+        <svg
+          ref={svgRef}
+          width={CANVAS_W}
+          height={CANVAS_H}
+          className="block"
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+        >
+          <defs>
+            <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+              <circle cx="1.5" cy="1.5" r="1.5" className="fill-navy-700" />
+            </pattern>
+            <marker
+              id="arrow"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" className="fill-gray-500" />
+            </marker>
+            <marker
+              id="arrow-gold"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" className="fill-gold-500" />
+            </marker>
+          </defs>
+          <rect width={CANVAS_W} height={CANVAS_H} fill="url(#dots)" />
+
+          {edges.map((e) => {
+            const from = positions.get(e.fromId);
+            const to = positions.get(e.toId);
+            if (!from || !to) return null;
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const dist = Math.max(Math.hypot(dx, dy), 1);
+            const trim = 78 / dist;
+            const x1 = from.x + dx * trim * 0.55;
+            const y1 = from.y + dy * trim * 0.55;
+            const x2 = to.x - dx * trim * 0.55;
+            const y2 = to.y - dy * trim * 0.55;
+            const live = Boolean(byId.get(e.fromId)?.completedAt);
+            const isSel = e.id === selectedEdgeId;
+            return (
+              <g key={e.id}>
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  strokeWidth={isSel ? 3.5 : 2.5}
+                  markerEnd={live ? "url(#arrow-gold)" : "url(#arrow)"}
+                  className={
+                    isSel
+                      ? "stroke-sky-400"
+                      : live
+                        ? "stroke-gold-500"
+                        : "stroke-gray-500"
+                  }
+                />
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  strokeWidth={16}
+                  stroke="transparent"
+                  className="cursor-pointer"
+                  onClick={() => {
+                    setSelectedId(null);
+                    setSelectedEdgeId(isSel ? null : e.id);
+                  }}
+                />
+              </g>
+            );
+          })}
+
+          {nodes.map((m, i) => {
+            const p = positions.get(m.id)!;
+            const completed = Boolean(m.completedAt);
+            const locked = isLocked(m);
+            const isSel = m.id === selectedId;
+            const isConnectSource = m.id === connectFrom;
+            void i;
+            return (
+              <g
+                key={m.id}
+                onPointerDown={onNodePointerDown(m)}
+                style={{ touchAction: "none" }}
+                className="cursor-pointer"
+              >
+                <rect
+                  x={p.x - M_W / 2}
+                  y={p.y - M_H / 2}
+                  width={M_W}
+                  height={M_H}
+                  rx={10}
+                  strokeWidth={2.5}
+                  strokeDasharray={locked && !completed ? "5 4" : undefined}
+                  className={
+                    completed
+                      ? "fill-gold-500 stroke-gold-400"
+                      : locked
+                        ? "fill-navy-800 stroke-gray-600"
+                        : "fill-navy-950 stroke-gray-100"
+                  }
+                />
+                {(isSel || isConnectSource) && (
+                  <rect
+                    x={p.x - M_W / 2 - 5}
+                    y={p.y - M_H / 2 - 5}
+                    width={M_W + 10}
+                    height={M_H + 10}
+                    rx={13}
+                    strokeWidth={2}
+                    strokeDasharray="4 3"
+                    className={`fill-none ${
+                      isConnectSource ? "stroke-gold-400" : "stroke-sky-400"
+                    }`}
+                  />
+                )}
+                <text
+                  x={p.x}
+                  y={p.y - (m.loopTarget || m.hookSourceId ? 4 : 0)}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={12.5}
+                  className={`select-none ${
+                    completed
+                      ? "fill-ongold font-semibold"
+                      : locked
+                        ? "fill-gray-500"
+                        : "fill-gray-100"
+                  }`}
+                >
+                  {m.title.length > 17 ? `${m.title.slice(0, 16)}…` : m.title}
+                </text>
+                {(m.loopTarget || m.hookSourceId) && (
+                  <text
+                    x={p.x}
+                    y={p.y + 13}
+                    textAnchor="middle"
+                    fontSize={10}
+                    className={completed ? "fill-ongold" : "fill-gold-400"}
+                  >
+                    {m.loopTarget ? `↻ ${m.loopCount}/${m.loopTarget}` : ""}
+                    {m.loopTarget && m.hookSourceId ? " " : ""}
+                    {m.hookSourceId ? "⚡" : ""}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      {selectedEdge && (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-sky-700 bg-navy-900 p-4 text-sm">
+          <p className="min-w-0">
+            Path: “{byId.get(selectedEdge.fromId)?.title}” →{" "}
+            “{byId.get(selectedEdge.toId)?.title}”
+          </p>
+          <button
+            onClick={() => {
+              deleteEdge(selectedEdge.id);
+              setSelectedEdgeId(null);
+            }}
+            className="shrink-0 rounded-lg border border-gray-600 px-3 py-1.5 text-gray-400 hover:text-red-500"
+          >
+            Delete path
+          </button>
+        </div>
+      )}
+
+      {selected ? (
+        <div className="mt-3 rounded-xl border border-sky-700 bg-navy-900 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium">{selected.title}</p>
+              <p className="text-xs text-gray-400">
+                {selected.completedAt
+                  ? "Completed"
+                  : isLocked(selected)
+                    ? "Locked — completes when any incoming path finishes"
+                    : selected.loopTarget
+                      ? `Loop: ${selected.loopCount}/${selected.loopTarget} reps (one per day)`
+                      : "Ready"}
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedId(null)}
+              aria-label="Close"
+              className="shrink-0 p-1 text-gray-500 hover:text-gray-200"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {selected.loopTarget && !selected.completedAt ? (
+              <button
+                onClick={() => tapLoop(selected.id)}
+                disabled={isLocked(selected) || selected.loopLast === todayKey()}
+                className="rounded-lg bg-gold-500 px-3 py-1.5 text-sm font-medium text-ongold hover:bg-gold-400 disabled:opacity-40"
+              >
+                {selected.loopLast === todayKey()
+                  ? "Counted today ✓"
+                  : `↻ Count today's rep (${selected.loopCount}/${selected.loopTarget})`}
+              </button>
+            ) : (
+              <button
+                onClick={() => toggleMilestone(selected.id)}
+                disabled={isLocked(selected) && !selected.completedAt}
+                className="rounded-lg bg-gold-500 px-3 py-1.5 text-sm font-medium text-ongold hover:bg-gold-400 disabled:opacity-40"
+              >
+                {selected.completedAt ? "Undo complete" : "✓ Complete"}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setConnectFrom(selected.id);
+              }}
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-navy-800"
+            >
+              → Connect
+            </button>
+            {selected.loopTarget ? (
+              <button
+                onClick={() => setLoop(selected.id, null)}
+                className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm hover:bg-navy-800"
+              >
+                Remove loop
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  const raw = prompt("Loop: how many reps to complete it? (e.g. 7)");
+                  const n = raw ? parseInt(raw, 10) : NaN;
+                  if (!Number.isNaN(n) && n > 0) setLoop(selected.id, n);
+                }}
+                className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm hover:bg-navy-800"
+              >
+                ↻ Make loop
+              </button>
+            )}
+            <button
+              onClick={() => {
+                deleteMilestone(selected.id);
+                setSelectedId(null);
+              }}
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm text-gray-400 hover:text-red-500"
+            >
+              Delete
+            </button>
+          </div>
+          <HookEditor milestone={selected} />
+        </div>
+      ) : (
+        !selectedEdge && (
+          <p className="mt-3 text-xs text-gray-400">
+            ＋ Step adds a box. Drag boxes to arrange your process. Tap one,
+            then “→ Connect”, then tap another to draw a path — a step unlocks
+            when any path into it completes (Plan A or Plan B). Loops need
+            daily reps before they open the next step.
+          </p>
+        )
+      )}
+    </>
+  );
+}
+
 /* ---------- Page ---------- */
 
 export default function GoalClient() {
@@ -648,10 +1133,14 @@ export default function GoalClient() {
             "Big goals need many things to come together. Add the major pieces, break them into sub-goals, and build from the base up."}
           {goal.structure === "tree" &&
             "Map it like a skill tree: add starting goals at the base, and completing each unlocks what grows above it."}
+          {goal.structure === "machine" &&
+            "Design your machine: add steps, drag them into a process, and connect the paths that drive your goal."}
         </p>
       )}
 
-      {goal.structure === "habit" ? (
+      {goal.structure === "machine" ? (
+        <MachineView goal={goal} />
+      ) : goal.structure === "habit" ? (
         <HabitView goal={goal} />
       ) : goal.structure === "linear" ? (
         <LinearPath goal={goal} milestones={milestones} />
