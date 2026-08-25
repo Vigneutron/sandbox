@@ -36,6 +36,9 @@ export default function RootLayout({
                 <Link href="/goals" className="hover:underline">
                   Goals
                 </Link>
+                <Link href="/account" className="hover:underline">
+                  Account
+                </Link>
                 <Link
                   href="/upgrade"
                   className="font-medium text-amber-600 hover:underline dark:text-amber-400"
