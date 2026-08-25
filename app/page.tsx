@@ -81,9 +81,11 @@ function GoalForm() {
 }
 
 export default function DashboardPage() {
-  const { state, ready, canAddGoal, deleteGoal } = useApp();
+  const { state, ready, canAddGoal, deleteGoal, addSampleGoals } = useApp();
 
   if (!ready) return null;
+
+  const hasSamples = state.goals.some((g) => g.identity === "Run a marathon");
 
   return (
     <div>
@@ -100,7 +102,17 @@ export default function DashboardPage() {
       )}
 
       {canAddGoal ? (
-        <GoalForm />
+        <>
+          <GoalForm />
+          {!hasSamples && (
+            <button
+              onClick={addSampleGoals}
+              className="mt-2 text-sm text-gray-400 underline hover:text-gray-200"
+            >
+              ✨ Add sample goals to explore
+            </button>
+          )}
+        </>
       ) : (
         <Link
           href="/upgrade"

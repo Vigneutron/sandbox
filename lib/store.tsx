@@ -63,6 +63,8 @@ interface AppContextValue {
   addGoal: (title: string, structure: GoalStructure) => string;
   deleteGoal: (goalId: string) => void;
   addMilestone: (goalId: string, title: string, parentId?: string | null) => void;
+  /** seeds one example goal of each structure, partly completed */
+  addSampleGoals: () => void;
   toggleMilestone: (milestoneId: string) => void;
   deleteMilestone: (milestoneId: string) => void;
   /** re-reads Pro status from the database (e.g. after Stripe checkout) */
@@ -283,6 +285,113 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [user, state.milestones]
   );
 
+  const addSampleGoals = useCallback(() => {
+    const nowIso = new Date().toISOString();
+    const goals: Goal[] = [];
+    const milestones: Milestone[] = [];
+
+    const mkGoal = (title: string, structure: GoalStructure): Goal => {
+      const goal: Goal = {
+        id: crypto.randomUUID(),
+        identity: title,
+        why: "",
+        structure,
+        createdAt: nowIso,
+      };
+      goals.push(goal);
+      return goal;
+    };
+    const mkMilestone = (
+      goal: Goal,
+      title: string,
+      position: number,
+      done = false,
+      parent: Milestone | null = null
+    ): Milestone => {
+      const milestone: Milestone = {
+        id: crypto.randomUUID(),
+        goalId: goal.id,
+        parentId: parent?.id ?? null,
+        title,
+        position,
+        completedAt: done ? nowIso : null,
+        createdAt: nowIso,
+      };
+      milestones.push(milestone);
+      return milestone;
+    };
+
+    // linear: a straight climb, two levels already cleared
+    const marathon = mkGoal("Run a marathon", "linear");
+    mkMilestone(marathon, "Run 1 mile without stopping", 1, true);
+    mkMilestone(marathon, "Finish a 5k", 2, true);
+    mkMilestone(marathon, "Finish a 10k", 3);
+    mkMilestone(marathon, "Run a half marathon", 4);
+    mkMilestone(marathon, "Run a full marathon", 5);
+
+    // pyramid: three big pieces with sub-goals; the base is mostly built
+    const business = mkGoal("Launch a small business", "pyramid");
+    const product = mkMilestone(business, "Build the product", 1);
+    const customers = mkMilestone(business, "Find customers", 2);
+    const profit = mkMilestone(business, "Reach profitability", 3);
+    mkMilestone(business, "Pick one painful problem", 1, true, product);
+    mkMilestone(business, "Ship a first version", 2, true, product);
+    mkMilestone(business, "Talk to 10 potential users", 1, true, customers);
+    mkMilestone(business, "Land 3 paying customers", 2, false, customers);
+    mkMilestone(business, "Cover monthly costs", 1, false, profit);
+    mkMilestone(business, "Pay yourself $1k/month", 2, false, profit);
+
+    // tree: completing a node unlocks the branches above it
+    const guitar = mkGoal("Learn guitar", "tree");
+    const chords = mkMilestone(guitar, "Learn 4 basic chords", 1, true);
+    const song = mkMilestone(guitar, "Play a full song", 1, true, chords);
+    const finger = mkMilestone(guitar, "Learn fingerpicking", 2, false, chords);
+    mkMilestone(guitar, "Perform for a friend", 1, false, song);
+    mkMilestone(guitar, "Learn barre chords", 2, false, song);
+    mkMilestone(guitar, "Fingerpick a full song", 1, false, finger);
+
+    setState((s) => ({
+      ...s,
+      goals: [...s.goals, ...goals],
+      milestones: [...s.milestones, ...milestones],
+    }));
+
+    const sb = getSupabase();
+    if (sb && user) {
+      sb.from("goals")
+        .insert(
+          goals.map((g) => ({
+            id: g.id,
+            user_id: user.id,
+            identity: g.identity,
+            why: g.why,
+            structure: g.structure,
+            created_at: g.createdAt,
+          }))
+        )
+        .then(({ error }) => {
+          if (error) {
+            console.error("supabase sample goals:", error.message);
+            return;
+          }
+          sb.from("milestones")
+            .insert(
+              milestones.map((m) => ({
+                id: m.id,
+                user_id: user.id,
+                goal_id: m.goalId,
+                parent_id: m.parentId,
+                title: m.title,
+                position: m.position,
+                completed_at: m.completedAt,
+                created_at: m.createdAt,
+              }))
+            )
+            .then(logError("sample milestones"));
+        });
+    }
+  }, [user]);
+
   const toggleMilestone = useCallback(
     (milestoneId: string) => {
       const target = state.milestones.find((m) => m.id === milestoneId);
@@ -398,6 +507,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addGoal,
         deleteGoal,
         addMilestone,
+        addSampleGoals,
         toggleMilestone,
         deleteMilestone,
         refreshPro,
