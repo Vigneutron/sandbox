@@ -20,18 +20,23 @@ export async function POST(req: NextRequest) {
   const stripe = new Stripe(stripeKey);
   const origin = req.headers.get("origin") ?? new URL(req.url).origin;
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    line_items: [{ price: priceId, quantity: 1 }],
-    customer_email: auth.user.email ?? undefined,
-    client_reference_id: auth.user.id,
-    metadata: { user_id: auth.user.id },
-    // carried onto the subscription so cancellation webhooks can find the user
-    subscription_data: { metadata: { user_id: auth.user.id } },
-    success_url: `${origin}/upgrade?success=1`,
-    cancel_url: `${origin}/upgrade?canceled=1`,
-    allow_promotion_codes: true,
-  });
-
-  return NextResponse.json({ url: session.url });
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      customer_email: auth.user.email ?? undefined,
+      client_reference_id: auth.user.id,
+      metadata: { user_id: auth.user.id },
+      // carried onto the subscription so cancellation webhooks can find the user
+      subscription_data: { metadata: { user_id: auth.user.id } },
+      success_url: `${origin}/upgrade?success=1`,
+      cancel_url: `${origin}/upgrade?canceled=1`,
+      allow_promotion_codes: true,
+    });
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown Stripe error";
+    console.error("checkout:", message);
+    return NextResponse.json({ error: `Stripe error: ${message}` }, { status: 500 });
+  }
 }
