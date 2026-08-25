@@ -44,6 +44,13 @@ function GoalForm() {
   );
 }
 
+const CUE_SUGGESTIONS = [
+  "I pour my morning coffee",
+  "I finish breakfast",
+  "I get home",
+  "I brush my teeth at night",
+];
+
 function HabitForm({ goal, onDone }: { goal: Goal; onDone: () => void }) {
   const { addHabit } = useApp();
   const [title, setTitle] = useState("");
@@ -65,29 +72,47 @@ function HabitForm({ goal, onDone }: { goal: Goal; onDone: () => void }) {
         onDone();
       }}
     >
-      <p className="text-sm text-zinc-500">
-        Make it tiny — two minutes or less. You&apos;re building the identity,
-        not chasing the outcome.
-      </p>
       <label className="block text-sm">
-        <span className="font-medium">After…</span>
+        <span className="font-medium">I will…</span>
         <input
           autoFocus
-          value={cue}
-          onChange={(e) => setCue(e.target.value)}
-          placeholder="I pour my morning coffee"
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-600"
-        />
-      </label>
-      <label className="block text-sm">
-        <span className="font-medium">…I will</span>
-        <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="put on my running shoes"
           className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-600"
         />
+        <span className="mt-1 block text-xs text-zinc-500">
+          Make it tiny — two minutes or less.
+        </span>
       </label>
+      <div className="text-sm">
+        <label className="block">
+          <span className="font-medium">After…</span>{" "}
+          <span className="text-zinc-500">(optional cue)</span>
+          <input
+            value={cue}
+            onChange={(e) => setCue(e.target.value)}
+            placeholder="I pour my morning coffee"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-600"
+          />
+        </label>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {CUE_SUGGESTIONS.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onClick={() => setCue(cue === suggestion ? "" : suggestion)}
+              className={`rounded-full px-2.5 py-1 text-xs ${
+                cue === suggestion
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+              }`}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="text-sm">
         <span className="font-medium">On days</span>
         <div className="mt-1 flex gap-1.5">
