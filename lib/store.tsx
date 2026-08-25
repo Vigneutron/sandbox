@@ -11,7 +11,7 @@ import {
 import { AppState, Goal, Habit, FREE_GOAL_LIMIT } from "./types";
 import { todayKey } from "./dates";
 
-const STORAGE_KEY = "momentum-v1";
+const STORAGE_KEY = "goal-goal-gadget-v1";
 
 const EMPTY: AppState = { goals: [], habits: [], completions: {}, pro: false };
 

@@ -7,7 +7,7 @@ import { AppProvider } from "@/lib/store";
 const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Momentum",
+  title: "Goal Goal Gadget",
   description:
     "Goal management for ambitious people. Tiny habits, real momentum — get 1% better every day.",
 };
@@ -24,8 +24,8 @@ export default function RootLayout({
           <header className="border-b border-zinc-200 dark:border-zinc-800">
             <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4">
               <Link href="/" className="text-lg font-bold tracking-tight">
-                Momentum{" "}
-                <span className="text-sm font-normal text-zinc-500">
+                Goal Goal Gadget{" "}
+                <span className="hidden text-sm font-normal text-zinc-500 sm:inline">
                   1% better every day
                 </span>
               </Link>

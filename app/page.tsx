@@ -21,7 +21,7 @@ export default function TodayPage() {
   if (state.goals.length === 0) {
     return (
       <div className="py-16 text-center">
-        <h1 className="text-2xl font-bold">Welcome to Momentum</h1>
+        <h1 className="text-2xl font-bold">Welcome to Goal Goal Gadget</h1>
         <p className="mx-auto mt-3 max-w-md text-zinc-600 dark:text-zinc-400">
           Every action you take is a vote for the person you want to become.
           Start by naming who that is.

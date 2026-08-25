@@ -1,4 +1,4 @@
-# Momentum
+# Goal Goal Gadget
 
 Goal management for ambitious people. Built on habit-science principles:
 identity-based goals, tiny two-minute habits, implementation intentions

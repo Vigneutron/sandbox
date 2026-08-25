@@ -17,9 +17,9 @@ export default function UpgradePage() {
   if (state.pro) {
     return (
       <div className="py-16 text-center">
-        <h1 className="text-2xl font-bold">You&apos;re on Momentum Pro 🎉</h1>
+        <h1 className="text-2xl font-bold">You&apos;re on Goal Goal Gadget Pro 🎉</h1>
         <p className="mt-3 text-zinc-600 dark:text-zinc-400">
-          Unlimited goals, no ads. Thanks for supporting Momentum.
+          Unlimited goals, no ads. Thanks for supporting Goal Goal Gadget.
         </p>
       </div>
     );
@@ -27,7 +27,7 @@ export default function UpgradePage() {
 
   return (
     <div className="mx-auto max-w-md py-8">
-      <h1 className="text-center text-2xl font-bold">Momentum Pro</h1>
+      <h1 className="text-center text-2xl font-bold">Goal Goal Gadget Pro</h1>
       <p className="mt-2 text-center text-zinc-600 dark:text-zinc-400">
         The free plan includes {FREE_GOAL_LIMIT} goals with ads. Pro removes
         every limit for less than a coffee.
