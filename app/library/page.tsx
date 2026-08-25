@@ -65,7 +65,7 @@ export default function LibraryPage() {
     );
   }
 
-  const useTemplate = async (template: TemplateRow) => {
+  const copyTemplate = async (template: TemplateRow) => {
     const sb = getSupabase();
     if (!sb) return;
     setBusyId(template.id);
@@ -143,7 +143,7 @@ export default function LibraryPage() {
                 </p>
               </div>
               <button
-                onClick={() => useTemplate(t)}
+                onClick={() => copyTemplate(t)}
                 disabled={busyId !== null}
                 className="shrink-0 rounded-lg bg-gold-500 px-4 py-2 text-sm font-medium text-ongold hover:bg-gold-400 disabled:opacity-50"
               >
