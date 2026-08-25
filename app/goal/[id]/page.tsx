@@ -134,17 +134,11 @@ function BranchView({
 }) {
   const { addMilestone, toggleMilestone, deleteMilestone } = useApp();
   const [addingFor, setAddingFor] = useState<string | null>(null);
-  const isTree = goal.structure === "tree";
 
-  const byId = new Map(milestones.map((m) => [m.id, m]));
   const childrenOf = (parentId: string | null) =>
     milestones
       .filter((m) => m.parentId === parentId)
       .sort((a, b) => a.position - b.position);
-
-  // tree mode: a node is locked until its parent is completed
-  const isLocked = (m: Milestone) =>
-    isTree && m.parentId !== null && !byId.get(m.parentId)?.completedAt;
 
   const renderBranch = (parentId: string | null, depth: number) => {
     const nodes = childrenOf(parentId);
@@ -159,29 +153,19 @@ function BranchView({
       >
         {nodes.map((node) => {
           const completed = Boolean(node.completedAt);
-          const locked = isLocked(node);
           return (
             <div key={node.id}>
-              <div
-                className={`flex items-center gap-3 py-1.5 ${locked ? "opacity-50" : ""}`}
-              >
+              <div className="flex items-center gap-3 py-1.5">
                 <button
                   onClick={() => toggleMilestone(node.id)}
-                  disabled={locked}
-                  aria-label={
-                    locked
-                      ? `${node.title} (locked)`
-                      : `${completed ? "Un-complete" : "Complete"} ${node.title}`
-                  }
+                  aria-label={`${completed ? "Un-complete" : "Complete"} ${node.title}`}
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition ${
                     completed
                       ? "border-emerald-500 bg-emerald-500 text-white"
-                      : locked
-                        ? "border-zinc-300 bg-zinc-100 text-zinc-400 dark:border-zinc-600 dark:bg-zinc-800"
-                        : "border-amber-500 bg-white text-amber-600 dark:bg-zinc-900"
+                      : "border-amber-500 bg-white text-amber-600 dark:bg-zinc-900"
                   }`}
                 >
-                  {completed ? "✓" : locked ? "🔒" : "○"}
+                  {completed ? "✓" : "○"}
                 </button>
                 <p
                   className={`min-w-0 flex-1 ${completed ? "line-through opacity-70" : ""}`}
@@ -217,7 +201,7 @@ function BranchView({
               {addingFor === node.id && (
                 <div className="mb-2 ml-[1.4rem] border-l-2 border-dashed border-zinc-200 pl-4 dark:border-zinc-700">
                   <MilestoneInput
-                    placeholder={isTree ? "What does this unlock?" : "Sub-goal…"}
+                    placeholder="Sub-goal…"
                     onAdd={(t) => {
                       addMilestone(goal.id, t, node.id);
                       setAddingFor(null);
@@ -240,21 +224,255 @@ function BranchView({
         <MilestoneInput
           placeholder={
             milestones.length === 0
-              ? isTree
-                ? "First goal on the map…"
-                : "First big piece of this goal…"
-              : isTree
-                ? "Another starting goal…"
-                : "Another big piece…"
+              ? "First big piece of this goal…"
+              : "Another big piece…"
           }
           onAdd={(t) => addMilestone(goal.id, t, null)}
         />
         <p className="mt-2 text-xs text-zinc-400">
-          {isTree
-            ? "Tap ＋ on a node to add what completing it unlocks. Locked nodes open when their parent is done."
-            : "Tap ＋ on a node to break it into smaller sub-goals."}
+          Tap ＋ on a node to break it into smaller sub-goals.
         </p>
       </div>
+    </>
+  );
+}
+
+/* ---------- Tree: a 2D skill-tree map ---------- */
+
+const NODE_R = 22;
+const SLOT_W = 96;
+const LEVEL_H = 100;
+const PAD_X = 56;
+const PAD_TOP = 36;
+const LABEL_H = 48;
+
+function TreeMapView({
+  goal,
+  milestones,
+}: {
+  goal: Goal;
+  milestones: Milestone[];
+}) {
+  const { addMilestone, toggleMilestone, deleteMilestone } = useApp();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [branching, setBranching] = useState(false);
+
+  const byId = new Map(milestones.map((m) => [m.id, m]));
+  const childrenOf = (parentId: string | null) =>
+    milestones
+      .filter((m) => m.parentId === parentId)
+      .sort((a, b) => a.position - b.position);
+  const isLocked = (m: Milestone) =>
+    m.parentId !== null && !byId.get(m.parentId)?.completedAt;
+
+  // tidy-tree layout: leaves claim slots left to right, parents center over children
+  const pos = new Map<string, { x: number; y: number }>();
+  let leafCount = 0;
+  let maxDepth = 0;
+  const layout = (node: Milestone, depth: number): number => {
+    maxDepth = Math.max(maxDepth, depth);
+    const kids = childrenOf(node.id);
+    let x: number;
+    if (kids.length === 0) {
+      x = leafCount++ * SLOT_W;
+    } else {
+      const xs = kids.map((k) => layout(k, depth + 1));
+      x = (Math.min(...xs) + Math.max(...xs)) / 2;
+    }
+    pos.set(node.id, { x: x + PAD_X, y: depth * LEVEL_H + PAD_TOP });
+    return x;
+  };
+  childrenOf(null).forEach((root) => layout(root, 0));
+
+  const width = Math.max((leafCount - 1) * SLOT_W + PAD_X * 2, 280);
+  const height = maxDepth * LEVEL_H + PAD_TOP + NODE_R + LABEL_H;
+
+  const selected = selectedId ? (byId.get(selectedId) ?? null) : null;
+
+  const select = (id: string | null) => {
+    setSelectedId(id);
+    setBranching(false);
+  };
+
+  return (
+    <>
+      {milestones.length > 0 && (
+        <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <svg width={width} height={height} className="block">
+            {/* edges */}
+            {milestones.map((m) => {
+              if (!m.parentId) return null;
+              const from = pos.get(m.parentId);
+              const to = pos.get(m.id);
+              if (!from || !to) return null;
+              const midY = (from.y + to.y) / 2;
+              return (
+                <path
+                  key={`edge-${m.id}`}
+                  d={`M ${from.x} ${from.y + NODE_R} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y - NODE_R}`}
+                  fill="none"
+                  strokeWidth={2.5}
+                  className={
+                    m.completedAt
+                      ? "stroke-emerald-400"
+                      : isLocked(m)
+                        ? "stroke-zinc-200 dark:stroke-zinc-700"
+                        : "stroke-amber-300 dark:stroke-amber-700"
+                  }
+                />
+              );
+            })}
+            {/* nodes */}
+            {milestones.map((m) => {
+              const p = pos.get(m.id);
+              if (!p) return null;
+              const completed = Boolean(m.completedAt);
+              const locked = isLocked(m);
+              const isSelected = m.id === selectedId;
+              return (
+                <g
+                  key={m.id}
+                  onClick={() => select(isSelected ? null : m.id)}
+                  className="cursor-pointer"
+                >
+                  {isSelected && (
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={NODE_R + 6}
+                      className="fill-none stroke-sky-400"
+                      strokeWidth={2}
+                      strokeDasharray="4 3"
+                    />
+                  )}
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={NODE_R}
+                    strokeWidth={2.5}
+                    className={
+                      completed
+                        ? "fill-emerald-500 stroke-emerald-600"
+                        : locked
+                          ? "fill-zinc-100 stroke-zinc-300 dark:fill-zinc-800 dark:stroke-zinc-600"
+                          : "fill-white stroke-amber-500 dark:fill-zinc-900"
+                    }
+                  />
+                  <text
+                    x={p.x}
+                    y={p.y + 1}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={completed || locked ? 15 : 17}
+                    className={
+                      completed
+                        ? "fill-white font-bold"
+                        : locked
+                          ? "fill-zinc-400"
+                          : "fill-amber-500 font-bold"
+                    }
+                  >
+                    {completed ? "✓" : locked ? "🔒" : "○"}
+                  </text>
+                  <text
+                    x={p.x}
+                    y={p.y + NODE_R + 16}
+                    textAnchor="middle"
+                    fontSize={11}
+                    className={`${
+                      locked
+                        ? "fill-zinc-400 dark:fill-zinc-500"
+                        : "fill-zinc-700 dark:fill-zinc-300"
+                    } select-none`}
+                  >
+                    {m.title.length > 14 ? `${m.title.slice(0, 13)}…` : m.title}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
+
+      {selected ? (
+        <div className="mt-3 rounded-xl border border-sky-200 bg-white p-4 dark:border-sky-900 dark:bg-zinc-900">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium">{selected.title}</p>
+              <p className="text-xs text-zinc-500">
+                {selected.completedAt
+                  ? "Completed"
+                  : isLocked(selected)
+                    ? `Locked — complete "${byId.get(selected.parentId!)?.title}" first`
+                    : "Ready to complete"}
+              </p>
+            </div>
+            <button
+              onClick={() => select(null)}
+              aria-label="Close"
+              className="shrink-0 p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => toggleMilestone(selected.id)}
+              disabled={isLocked(selected)}
+              className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            >
+              {selected.completedAt ? "Undo complete" : "✓ Complete"}
+            </button>
+            <button
+              onClick={() => setBranching(!branching)}
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              ＋ Branch
+            </button>
+            <button
+              onClick={() => {
+                const kids = childrenOf(selected.id).length;
+                if (
+                  kids === 0 ||
+                  confirm(`Delete "${selected.title}" and everything under it?`)
+                ) {
+                  deleteMilestone(selected.id);
+                  select(null);
+                }
+              }}
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-500 hover:text-red-600 dark:border-zinc-700"
+            >
+              Delete
+            </button>
+          </div>
+          {branching && (
+            <div className="mt-3">
+              <MilestoneInput
+                placeholder="What does this unlock?"
+                onAdd={(t) => {
+                  addMilestone(goal.id, t, selected.id);
+                  setBranching(false);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mt-3">
+          <MilestoneInput
+            placeholder={
+              milestones.length === 0
+                ? "First goal on the map…"
+                : "Another starting goal…"
+            }
+            onAdd={(t) => addMilestone(goal.id, t, null)}
+          />
+          <p className="mt-2 text-xs text-zinc-400">
+            Tap a node to complete it or branch from it. Locked nodes open when
+            their parent is done. Scroll the map sideways as it grows.
+          </p>
+        </div>
+      )}
     </>
   );
 }
@@ -322,6 +540,8 @@ export default function GoalTreePage() {
 
       {goal.structure === "linear" ? (
         <LinearPath goal={goal} milestones={milestones} />
+      ) : goal.structure === "tree" ? (
+        <TreeMapView goal={goal} milestones={milestones} />
       ) : (
         <BranchView goal={goal} milestones={milestones} />
       )}
