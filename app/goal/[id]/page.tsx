@@ -34,7 +34,7 @@ function MilestoneInput({
       <button
         type="submit"
         disabled={!title.trim()}
-        className="shrink-0 rounded-lg bg-gold-500 px-3 py-2 text-sm font-medium text-navy-950 hover:bg-gold-400 disabled:opacity-40"
+        className="shrink-0 rounded-lg bg-gold-500 px-3 py-2 text-sm font-medium text-ongold hover:bg-gold-400 disabled:opacity-40"
       >
         Add
       </button>
@@ -92,7 +92,7 @@ function LinearPath({
                 aria-label={`${completed ? "Un-complete" : "Complete"} ${milestone.title}`}
                 className={`relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition ${
                   completed
-                    ? "border-gold-400 bg-gold-500 text-navy-950"
+                    ? "border-gold-400 bg-gold-500 text-ongold"
                     : isCurrent
                       ? "border-gray-100 bg-navy-900 text-gray-100 ring-4 ring-gold-700"
                       : "border-gray-600 bg-navy-900 text-gray-500"
@@ -133,12 +133,35 @@ function LinearPath({
 
 /* ---------- Pyramid & Tree: a 2D map, climbing upward ---------- */
 
-const NODE_R = 22;
-const SLOT_W = 96;
-const LEVEL_H = 100;
-const PAD_X = 56;
-const PAD_Y = 36;
-const LABEL_H = 48;
+const NODE_R = 24;
+const SLOT_W = 124;
+const LEVEL_H = 122;
+const PAD_X = 68;
+const PAD_Y = 38;
+const LABEL_H = 66;
+
+/** wrap a node label into whole-word lines that fit under the bubble */
+function wrapLabel(title: string, maxChars = 16, maxLines = 3): string[] {
+  const words = title.split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  if (lines.length > maxLines) {
+    const kept = lines.slice(0, maxLines);
+    kept[maxLines - 1] += "…";
+    return kept;
+  }
+  return lines;
+}
 
 function GraphView({
   goal,
@@ -290,7 +313,7 @@ function GraphView({
                     fontSize={completed || locked ? 15 : 17}
                     className={
                       completed
-                        ? "fill-navy-950 font-bold"
+                        ? "fill-ongold font-bold"
                         : locked
                           ? "fill-gray-500"
                           : "fill-gray-100 font-bold"
@@ -300,16 +323,20 @@ function GraphView({
                   </text>
                   <text
                     x={p.x}
-                    y={p.y + NODE_R + 16}
+                    y={p.y + NODE_R + 18}
                     textAnchor="middle"
-                    fontSize={11}
+                    fontSize={13}
                     className={`${
                       locked
                         ? "fill-gray-500"
                         : "fill-gray-200"
                     } select-none`}
                   >
-                    {m.title.length > 14 ? `${m.title.slice(0, 13)}…` : m.title}
+                    {wrapLabel(m.title).map((line, li) => (
+                      <tspan key={li} x={p.x} dy={li === 0 ? 0 : 15}>
+                        {line}
+                      </tspan>
+                    ))}
                   </text>
                 </g>
               );
@@ -343,7 +370,7 @@ function GraphView({
             <button
               onClick={() => toggleMilestone(selected.id)}
               disabled={isLocked(selected)}
-              className="rounded-lg bg-gold-500 px-3 py-1.5 text-sm font-medium text-navy-950 hover:bg-gold-400 disabled:opacity-40"
+              className="rounded-lg bg-gold-500 px-3 py-1.5 text-sm font-medium text-ongold hover:bg-gold-400 disabled:opacity-40"
             >
               {selected.completedAt ? "Undo complete" : "✓ Complete"}
             </button>

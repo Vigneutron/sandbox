@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-/* Brand palette: navy ground, gray text, gold accent */
+/* Brand palette: navy ground, gray lines, gold + white accents.
+   The navy/gray scales are semantic: light mode remaps them below, so
+   utility classes stay theme-agnostic. `ongold` is text on gold surfaces
+   and stays dark in both themes. */
 @theme {
   --color-navy-500: #7186b8;
   --color-navy-600: #56679a;
@@ -15,14 +18,37 @@
   --color-gold-600: #a98432;
   --color-gold-700: #7c6023;
   --color-gold-900: #453511;
+
+  --color-ongold: #26324f;
 }
 
-/* slightly larger type everywhere — all rem-based sizes scale from this */
+/* light theme: follows the device setting */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-navy-950: #eef1f7; /* page ground */
+    --color-navy-900: #ffffff; /* cards */
+    --color-navy-800: #e3e8f1; /* subtle fills, tracks */
+    --color-navy-700: #d0d7e5; /* chips */
+    --color-navy-600: #b6c0d6;
+    --color-navy-500: #97a5c4;
+
+    --color-gray-100: #1d2740; /* primary text flips to dark navy */
+    --color-gray-200: #2a3554;
+    --color-gray-300: #3d4b6f; /* secondary text */
+    --color-gray-400: #56648c;
+    --color-gray-500: #707d9f; /* faint text */
+    --color-gray-600: #a9b4cc; /* strong lines */
+    --color-gray-700: #c8cfdf; /* subtle lines */
+    --color-gray-800: #dde3ee;
+  }
+}
+
+/* larger type everywhere — all rem-based sizes scale from this */
 html {
-  font-size: 17px;
+  font-size: 18px;
 }
 
 body {
-  background: #26324f;
-  color: #f3f4f6;
+  background: var(--color-navy-950);
+  color: var(--color-gray-100);
 }

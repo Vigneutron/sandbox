@@ -156,7 +156,7 @@ export default function AccountPage() {
           <button
             type="submit"
             disabled={busy}
-            className="flex-1 rounded-md bg-gold-500 py-2 text-sm font-medium text-navy-950 hover:bg-gold-400 disabled:opacity-50"
+            className="flex-1 rounded-md bg-gold-500 py-2 text-sm font-medium text-ongold hover:bg-gold-400 disabled:opacity-50"
           >
             Sign in
           </button>

@@ -52,7 +52,7 @@ function GoalForm() {
         <button
           type="submit"
           disabled={!title.trim()}
-          className="shrink-0 rounded-lg bg-gold-500 px-4 py-2 font-medium text-navy-950 hover:bg-gold-400 disabled:opacity-40"
+          className="shrink-0 rounded-lg bg-gold-500 px-4 py-2 font-medium text-ongold hover:bg-gold-400 disabled:opacity-40"
         >
           Add
         </button>
@@ -65,7 +65,7 @@ function GoalForm() {
             onClick={() => setStructure(s.key)}
             className={`rounded-full px-3 py-1 text-xs font-medium ${
               structure === s.key
-                ? "bg-gold-500 text-navy-950"
+                ? "bg-gold-500 text-ongold"
                 : "bg-navy-700 text-gray-300"
             }`}
           >

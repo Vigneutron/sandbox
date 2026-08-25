@@ -136,14 +136,14 @@ export default function UpgradePage() {
               setBusy(false);
               setMessage(error ?? "Something went wrong.");
             }}
-            className="mt-6 w-full rounded-lg bg-gold-500 py-2.5 font-medium text-navy-950 hover:bg-gold-400 disabled:opacity-50"
+            className="mt-6 w-full rounded-lg bg-gold-500 py-2.5 font-medium text-ongold hover:bg-gold-400 disabled:opacity-50"
           >
             {busy ? "Opening checkout…" : "Upgrade to Pro"}
           </button>
         ) : (
           <Link
             href="/account"
-            className="mt-6 block w-full rounded-lg bg-gold-500 py-2.5 text-center font-medium text-navy-950 hover:bg-gold-400"
+            className="mt-6 block w-full rounded-lg bg-gold-500 py-2.5 text-center font-medium text-ongold hover:bg-gold-400"
           >
             Sign in to upgrade
           </Link>
