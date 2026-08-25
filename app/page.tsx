@@ -11,19 +11,19 @@ const STRUCTURES: { key: GoalStructure; label: string; icon: string; desc: strin
     key: "linear",
     label: "Linear",
     icon: "→",
-    desc: "A straight path — clear milestones one after another.",
+    desc: "A straight climb — clear milestones one after another.",
   },
   {
     key: "pyramid",
     label: "Pyramid",
     icon: "△",
-    desc: "One big goal broken into sub-goals, and those into smaller ones.",
+    desc: "Break the goal into sub-goals and build from the base up — finishing them unlocks the level above.",
   },
   {
     key: "tree",
     label: "Tree",
     icon: "⑂",
-    desc: "Like a skill tree — completing a goal unlocks new ones.",
+    desc: "Like a skill tree — completing a goal unlocks new branches above it.",
   },
 ];
 

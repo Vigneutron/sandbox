@@ -42,7 +42,7 @@ function MilestoneInput({
   );
 }
 
-/* ---------- Linear: a straight level path ---------- */
+/* ---------- Linear: a climb from bottom to top ---------- */
 
 function LinearPath({
   goal,
@@ -53,21 +53,37 @@ function LinearPath({
 }) {
   const { addMilestone, toggleMilestone, deleteMilestone } = useApp();
   const currentId = milestones.find((m) => !m.completedAt)?.id;
+  // summit first: the latest milestone renders at the top, the start at the bottom
+  const climb = [...milestones].reverse();
 
   return (
     <>
-      <ol className="relative mt-6 space-y-1">
-        {milestones.map((milestone, i) => {
+      <div className="mt-6">
+        <MilestoneInput
+          placeholder={
+            milestones.length === 0 ? "Save my first $1,000" : "Next level up…"
+          }
+          onAdd={(t) => addMilestone(goal.id, t)}
+        />
+        <p className="mt-1.5 text-xs text-zinc-400">
+          New milestones stack on top — the climb starts at the bottom.
+        </p>
+      </div>
+      <ol className="relative mt-4 space-y-1">
+        {climb.map((milestone, j) => {
           const completed = Boolean(milestone.completedAt);
           const isCurrent = milestone.id === currentId;
-          const isLast = i === milestones.length - 1;
+          const below = climb[j + 1]; // the milestone beneath this one
+          const number = milestones.length - j;
           return (
             <li key={milestone.id} className="relative flex gap-4">
-              {!isLast && (
+              {below && (
                 <span
                   aria-hidden
                   className={`absolute left-6 top-12 h-[calc(100%-2.5rem)] w-0.5 -translate-x-1/2 ${
-                    completed ? "bg-emerald-400" : "bg-zinc-200 dark:bg-zinc-700"
+                    below.completedAt
+                      ? "bg-emerald-400"
+                      : "bg-zinc-200 dark:bg-zinc-700"
                   }`}
                 />
               )}
@@ -82,7 +98,7 @@ function LinearPath({
                       : "border-zinc-300 bg-white text-zinc-400 dark:border-zinc-600 dark:bg-zinc-900"
                 }`}
               >
-                {completed ? "✓" : i + 1}
+                {completed ? "✓" : number}
               </button>
               <div
                 className={`flex min-w-0 flex-1 items-center justify-between gap-2 pb-8 pt-3 ${
@@ -111,142 +127,20 @@ function LinearPath({
           );
         })}
       </ol>
-      <div className="mt-2">
-        <MilestoneInput
-          placeholder={
-            milestones.length === 0 ? "Save my first $1,000" : "Next milestone…"
-          }
-          onAdd={(t) => addMilestone(goal.id, t)}
-        />
-      </div>
     </>
   );
 }
 
-/* ---------- Pyramid & Tree: branching nodes ---------- */
-
-function BranchView({
-  goal,
-  milestones,
-}: {
-  goal: Goal;
-  milestones: Milestone[];
-}) {
-  const { addMilestone, toggleMilestone, deleteMilestone } = useApp();
-  const [addingFor, setAddingFor] = useState<string | null>(null);
-
-  const childrenOf = (parentId: string | null) =>
-    milestones
-      .filter((m) => m.parentId === parentId)
-      .sort((a, b) => a.position - b.position);
-
-  const renderBranch = (parentId: string | null, depth: number) => {
-    const nodes = childrenOf(parentId);
-    if (nodes.length === 0) return null;
-    return (
-      <div
-        className={
-          depth > 0
-            ? "ml-[1.4rem] border-l-2 border-zinc-200 pl-4 dark:border-zinc-700"
-            : ""
-        }
-      >
-        {nodes.map((node) => {
-          const completed = Boolean(node.completedAt);
-          return (
-            <div key={node.id}>
-              <div className="flex items-center gap-3 py-1.5">
-                <button
-                  onClick={() => toggleMilestone(node.id)}
-                  aria-label={`${completed ? "Un-complete" : "Complete"} ${node.title}`}
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition ${
-                    completed
-                      ? "border-emerald-500 bg-emerald-500 text-white"
-                      : "border-amber-500 bg-white text-amber-600 dark:bg-zinc-900"
-                  }`}
-                >
-                  {completed ? "✓" : "○"}
-                </button>
-                <p
-                  className={`min-w-0 flex-1 ${completed ? "line-through opacity-70" : ""}`}
-                >
-                  {node.title}
-                </p>
-                <button
-                  onClick={() =>
-                    setAddingFor(addingFor === node.id ? null : node.id)
-                  }
-                  aria-label={`Add under ${node.title}`}
-                  className="shrink-0 p-1 text-lg leading-none text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
-                >
-                  ＋
-                </button>
-                <button
-                  onClick={() => {
-                    const kids = childrenOf(node.id).length;
-                    if (
-                      kids === 0 ||
-                      confirm(
-                        `Delete "${node.title}" and everything under it?`
-                      )
-                    )
-                      deleteMilestone(node.id);
-                  }}
-                  aria-label={`Delete ${node.title}`}
-                  className="shrink-0 p-1 text-zinc-400 hover:text-red-600"
-                >
-                  ✕
-                </button>
-              </div>
-              {addingFor === node.id && (
-                <div className="mb-2 ml-[1.4rem] border-l-2 border-dashed border-zinc-200 pl-4 dark:border-zinc-700">
-                  <MilestoneInput
-                    placeholder="Sub-goal…"
-                    onAdd={(t) => {
-                      addMilestone(goal.id, t, node.id);
-                      setAddingFor(null);
-                    }}
-                  />
-                </div>
-              )}
-              {renderBranch(node.id, depth + 1)}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  return (
-    <>
-      <div className="mt-6">{renderBranch(null, 0)}</div>
-      <div className="mt-3">
-        <MilestoneInput
-          placeholder={
-            milestones.length === 0
-              ? "First big piece of this goal…"
-              : "Another big piece…"
-          }
-          onAdd={(t) => addMilestone(goal.id, t, null)}
-        />
-        <p className="mt-2 text-xs text-zinc-400">
-          Tap ＋ on a node to break it into smaller sub-goals.
-        </p>
-      </div>
-    </>
-  );
-}
-
-/* ---------- Tree: a 2D skill-tree map ---------- */
+/* ---------- Pyramid & Tree: a 2D map, climbing upward ---------- */
 
 const NODE_R = 22;
 const SLOT_W = 96;
 const LEVEL_H = 100;
 const PAD_X = 56;
-const PAD_TOP = 36;
+const PAD_Y = 36;
 const LABEL_H = 48;
 
-function TreeMapView({
+function GraphView({
   goal,
   milestones,
 }: {
@@ -256,43 +150,69 @@ function TreeMapView({
   const { addMilestone, toggleMilestone, deleteMilestone } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [branching, setBranching] = useState(false);
+  const isPyramid = goal.structure === "pyramid";
 
   const byId = new Map(milestones.map((m) => [m.id, m]));
   const childrenOf = (parentId: string | null) =>
     milestones
       .filter((m) => m.parentId === parentId)
       .sort((a, b) => a.position - b.position);
-  const isLocked = (m: Milestone) =>
-    m.parentId !== null && !byId.get(m.parentId)?.completedAt;
 
-  // tidy-tree layout: leaves claim slots left to right, parents center over children
-  const pos = new Map<string, { x: number; y: number }>();
+  // pyramid: a parent is locked until all of its sub-goals are done
+  // tree: a child is locked until its parent is done
+  const isLocked = (m: Milestone) =>
+    isPyramid
+      ? childrenOf(m.id).some((c) => !c.completedAt)
+      : m.parentId !== null && !byId.get(m.parentId)?.completedAt;
+
+  // tidy-tree layout: leaves claim slots left to right, parents center over
+  // children; y is assigned afterwards so both modes climb toward the top
+  const xs = new Map<string, number>();
+  const depths = new Map<string, number>();
   let leafCount = 0;
   let maxDepth = 0;
   const layout = (node: Milestone, depth: number): number => {
     maxDepth = Math.max(maxDepth, depth);
+    depths.set(node.id, depth);
     const kids = childrenOf(node.id);
     let x: number;
     if (kids.length === 0) {
       x = leafCount++ * SLOT_W;
     } else {
-      const xs = kids.map((k) => layout(k, depth + 1));
-      x = (Math.min(...xs) + Math.max(...xs)) / 2;
+      const kidXs = kids.map((k) => layout(k, depth + 1));
+      x = (Math.min(...kidXs) + Math.max(...kidXs)) / 2;
     }
-    pos.set(node.id, { x: x + PAD_X, y: depth * LEVEL_H + PAD_TOP });
+    xs.set(node.id, x + PAD_X);
     return x;
   };
   childrenOf(null).forEach((root) => layout(root, 0));
 
+  // pyramid apex (depth 0) sits at the top, its base at the bottom;
+  // tree roots (depth 0) sit at the bottom and growth climbs upward
+  const yOf = (id: string) => {
+    const depth = depths.get(id) ?? 0;
+    const level = isPyramid ? depth : maxDepth - depth;
+    return level * LEVEL_H + PAD_Y;
+  };
+  const pos = new Map<string, { x: number; y: number }>();
+  for (const m of milestones) {
+    const x = xs.get(m.id);
+    if (x !== undefined) pos.set(m.id, { x, y: yOf(m.id) });
+  }
+
   const width = Math.max((leafCount - 1) * SLOT_W + PAD_X * 2, 280);
-  const height = maxDepth * LEVEL_H + PAD_TOP + NODE_R + LABEL_H;
+  const height = maxDepth * LEVEL_H + PAD_Y + NODE_R + LABEL_H;
 
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null;
-
   const select = (id: string | null) => {
     setSelectedId(id);
     setBranching(false);
   };
+
+  const lockedReason = (m: Milestone) =>
+    isPyramid
+      ? "Locked — finish its sub-goals first"
+      : `Locked — complete "${byId.get(m.parentId!)?.title}" first`;
 
   return (
     <>
@@ -305,17 +225,21 @@ function TreeMapView({
               const from = pos.get(m.parentId);
               const to = pos.get(m.id);
               if (!from || !to) return null;
-              const midY = (from.y + to.y) / 2;
+              const dir = to.y > from.y ? 1 : -1;
+              const startY = from.y + dir * NODE_R;
+              const endY = to.y - dir * NODE_R;
+              const midY = (startY + endY) / 2;
+              const gated = isPyramid ? byId.get(m.parentId)! : m;
               return (
                 <path
                   key={`edge-${m.id}`}
-                  d={`M ${from.x} ${from.y + NODE_R} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y - NODE_R}`}
+                  d={`M ${from.x} ${startY} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${endY}`}
                   fill="none"
                   strokeWidth={2.5}
                   className={
-                    m.completedAt
+                    gated.completedAt
                       ? "stroke-emerald-400"
-                      : isLocked(m)
+                      : isLocked(gated)
                         ? "stroke-zinc-200 dark:stroke-zinc-700"
                         : "stroke-amber-300 dark:stroke-amber-700"
                   }
@@ -403,7 +327,7 @@ function TreeMapView({
                 {selected.completedAt
                   ? "Completed"
                   : isLocked(selected)
-                    ? `Locked — complete "${byId.get(selected.parentId!)?.title}" first`
+                    ? lockedReason(selected)
                     : "Ready to complete"}
               </p>
             </div>
@@ -427,7 +351,7 @@ function TreeMapView({
               onClick={() => setBranching(!branching)}
               className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
-              ＋ Branch
+              {isPyramid ? "＋ Sub-goal" : "＋ Branch"}
             </button>
             <button
               onClick={() => {
@@ -448,7 +372,9 @@ function TreeMapView({
           {branching && (
             <div className="mt-3">
               <MilestoneInput
-                placeholder="What does this unlock?"
+                placeholder={
+                  isPyramid ? "Sub-goal beneath this…" : "What does this unlock?"
+                }
                 onAdd={(t) => {
                   addMilestone(goal.id, t, selected.id);
                   setBranching(false);
@@ -462,14 +388,19 @@ function TreeMapView({
           <MilestoneInput
             placeholder={
               milestones.length === 0
-                ? "First goal on the map…"
-                : "Another starting goal…"
+                ? isPyramid
+                  ? "First big piece of this goal…"
+                  : "First goal on the map…"
+                : isPyramid
+                  ? "Another big piece…"
+                  : "Another starting goal…"
             }
             onAdd={(t) => addMilestone(goal.id, t, null)}
           />
           <p className="mt-2 text-xs text-zinc-400">
-            Tap a node to complete it or branch from it. Locked nodes open when
-            their parent is done. Scroll the map sideways as it grows.
+            {isPyramid
+              ? "Tap a node to break it into sub-goals below it. Parents unlock when everything beneath them is done — build from the base up."
+              : "Tap a node to complete it or branch upward from it. Locked nodes open when the node beneath them is done."}
           </p>
         </div>
       )}
@@ -530,20 +461,18 @@ export default function GoalTreePage() {
       {milestones.length === 0 && (
         <p className="mt-6 text-zinc-600 dark:text-zinc-400">
           {goal.structure === "linear" &&
-            "Break this goal into milestones — the levels you'll clear on the way. Start with the first small win."}
+            "Break this goal into milestones — the levels you'll climb on the way. Start with the first small win."}
           {goal.structure === "pyramid" &&
-            "Big goals need many things to come together. Add the major pieces, then break each into sub-goals."}
+            "Big goals need many things to come together. Add the major pieces, break them into sub-goals, and build from the base up."}
           {goal.structure === "tree" &&
-            "Map it like a skill tree: add starting goals, and completing each unlocks what comes next."}
+            "Map it like a skill tree: add starting goals at the base, and completing each unlocks what grows above it."}
         </p>
       )}
 
       {goal.structure === "linear" ? (
         <LinearPath goal={goal} milestones={milestones} />
-      ) : goal.structure === "tree" ? (
-        <TreeMapView goal={goal} milestones={milestones} />
       ) : (
-        <BranchView goal={goal} milestones={milestones} />
+        <GraphView goal={goal} milestones={milestones} />
       )}
     </div>
   );
