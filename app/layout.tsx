@@ -18,14 +18,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geist.className} min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100`}
+        className={`${geist.className} min-h-screen bg-navy-950 text-gray-100`}
       >
         <AppProvider>
-          <header className="border-b border-zinc-200 dark:border-zinc-800">
+          <header className="border-b border-gray-700">
             <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4">
               <Link href="/" className="text-lg font-bold tracking-tight">
                 Goal Goal Gadget{" "}
-                <span className="hidden text-sm font-normal text-zinc-500 sm:inline">
+                <span className="hidden text-sm font-normal text-gray-400 sm:inline">
                   level up your goals
                 </span>
               </Link>
@@ -38,7 +38,7 @@ export default function RootLayout({
                 </Link>
                 <Link
                   href="/upgrade"
-                  className="font-medium text-amber-600 hover:underline dark:text-amber-400"
+                  className="font-medium text-gold-400 hover:underline"
                 >
                   Pro
                 </Link>

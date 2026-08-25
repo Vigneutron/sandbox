@@ -29,12 +29,12 @@ function MilestoneInput({
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder={placeholder}
-        className="w-full flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+        className="w-full flex-1 rounded-lg border border-gray-600 bg-navy-900 px-3 py-2 text-sm outline-none focus:border-gold-500"
       />
       <button
         type="submit"
         disabled={!title.trim()}
-        className="shrink-0 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        className="shrink-0 rounded-lg bg-gold-500 px-3 py-2 text-sm font-medium text-navy-950 hover:bg-gold-400 disabled:opacity-40"
       >
         Add
       </button>
@@ -65,7 +65,7 @@ function LinearPath({
           }
           onAdd={(t) => addMilestone(goal.id, t)}
         />
-        <p className="mt-1.5 text-xs text-zinc-400">
+        <p className="mt-1.5 text-xs text-gray-500">
           New milestones stack on top — the climb starts at the bottom.
         </p>
       </div>
@@ -82,8 +82,8 @@ function LinearPath({
                   aria-hidden
                   className={`absolute left-6 top-12 h-[calc(100%-2.5rem)] w-0.5 -translate-x-1/2 ${
                     below.completedAt
-                      ? "bg-emerald-400"
-                      : "bg-zinc-200 dark:bg-zinc-700"
+                      ? "bg-gold-500"
+                      : "bg-navy-700"
                   }`}
                 />
               )}
@@ -92,10 +92,10 @@ function LinearPath({
                 aria-label={`${completed ? "Un-complete" : "Complete"} ${milestone.title}`}
                 className={`relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition ${
                   completed
-                    ? "border-emerald-500 bg-emerald-500 text-white"
+                    ? "border-gold-400 bg-gold-500 text-navy-950"
                     : isCurrent
-                      ? "border-amber-500 bg-white text-amber-600 ring-4 ring-amber-100 dark:bg-zinc-900 dark:ring-amber-950"
-                      : "border-zinc-300 bg-white text-zinc-400 dark:border-zinc-600 dark:bg-zinc-900"
+                      ? "border-gray-100 bg-navy-900 text-gray-100 ring-4 ring-gold-700"
+                      : "border-gray-600 bg-navy-900 text-gray-500"
                 }`}
               >
                 {completed ? "✓" : number}
@@ -110,7 +110,7 @@ function LinearPath({
                     {milestone.title}
                   </p>
                   {isCurrent && (
-                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                    <p className="text-xs font-medium text-gold-400">
                       Current level
                     </p>
                   )}
@@ -118,7 +118,7 @@ function LinearPath({
                 <button
                   onClick={() => deleteMilestone(milestone.id)}
                   aria-label={`Delete ${milestone.title}`}
-                  className="shrink-0 p-1 text-zinc-400 hover:text-red-600"
+                  className="shrink-0 p-1 text-gray-500 hover:text-red-600"
                 >
                   ✕
                 </button>
@@ -217,7 +217,7 @@ function GraphView({
   return (
     <>
       {milestones.length > 0 && (
-        <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mt-6 overflow-x-auto rounded-xl border border-gray-700 bg-navy-900">
           <svg width={width} height={height} className="block">
             {/* edges */}
             {milestones.map((m) => {
@@ -238,10 +238,10 @@ function GraphView({
                   strokeWidth={2.5}
                   className={
                     gated.completedAt
-                      ? "stroke-emerald-400"
+                      ? "stroke-gold-500"
                       : isLocked(gated)
-                        ? "stroke-zinc-200 dark:stroke-zinc-700"
-                        : "stroke-amber-300 dark:stroke-amber-700"
+                        ? "stroke-gray-700"
+                        : "stroke-gray-500"
                   }
                 />
               );
@@ -276,10 +276,10 @@ function GraphView({
                     strokeWidth={2.5}
                     className={
                       completed
-                        ? "fill-emerald-500 stroke-emerald-600"
+                        ? "fill-gold-500 stroke-gold-400"
                         : locked
-                          ? "fill-zinc-100 stroke-zinc-300 dark:fill-zinc-800 dark:stroke-zinc-600"
-                          : "fill-white stroke-amber-500 dark:fill-zinc-900"
+                          ? "fill-navy-800 stroke-gray-600"
+                          : "fill-navy-900 stroke-gray-100"
                     }
                   />
                   <text
@@ -290,10 +290,10 @@ function GraphView({
                     fontSize={completed || locked ? 15 : 17}
                     className={
                       completed
-                        ? "fill-white font-bold"
+                        ? "fill-navy-950 font-bold"
                         : locked
-                          ? "fill-zinc-400"
-                          : "fill-amber-500 font-bold"
+                          ? "fill-gray-500"
+                          : "fill-gray-100 font-bold"
                     }
                   >
                     {completed ? "✓" : locked ? "🔒" : "○"}
@@ -305,8 +305,8 @@ function GraphView({
                     fontSize={11}
                     className={`${
                       locked
-                        ? "fill-zinc-400 dark:fill-zinc-500"
-                        : "fill-zinc-700 dark:fill-zinc-300"
+                        ? "fill-gray-500"
+                        : "fill-gray-200"
                     } select-none`}
                   >
                     {m.title.length > 14 ? `${m.title.slice(0, 13)}…` : m.title}
@@ -319,11 +319,11 @@ function GraphView({
       )}
 
       {selected ? (
-        <div className="mt-3 rounded-xl border border-sky-200 bg-white p-4 dark:border-sky-900 dark:bg-zinc-900">
+        <div className="mt-3 rounded-xl border border-sky-700 bg-navy-900 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="font-medium">{selected.title}</p>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-gray-400">
                 {selected.completedAt
                   ? "Completed"
                   : isLocked(selected)
@@ -334,7 +334,7 @@ function GraphView({
             <button
               onClick={() => select(null)}
               aria-label="Close"
-              className="shrink-0 p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+              className="shrink-0 p-1 text-gray-500 hover:text-gray-200"
             >
               ✕
             </button>
@@ -343,13 +343,13 @@ function GraphView({
             <button
               onClick={() => toggleMilestone(selected.id)}
               disabled={isLocked(selected)}
-              className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              className="rounded-lg bg-gold-500 px-3 py-1.5 text-sm font-medium text-navy-950 hover:bg-gold-400 disabled:opacity-40"
             >
               {selected.completedAt ? "Undo complete" : "✓ Complete"}
             </button>
             <button
               onClick={() => setBranching(!branching)}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm font-medium hover:bg-navy-800"
             >
               {isPyramid ? "＋ Sub-goal" : "＋ Branch"}
             </button>
@@ -364,7 +364,7 @@ function GraphView({
                   select(null);
                 }
               }}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-500 hover:text-red-600 dark:border-zinc-700"
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm text-gray-400 hover:text-red-600"
             >
               Delete
             </button>
@@ -397,7 +397,7 @@ function GraphView({
             }
             onAdd={(t) => addMilestone(goal.id, t, null)}
           />
-          <p className="mt-2 text-xs text-zinc-400">
+          <p className="mt-2 text-xs text-gray-500">
             {isPyramid
               ? "Tap a node to break it into sub-goals below it. Parents unlock when everything beneath them is done — build from the base up."
               : "Tap a node to complete it or branch upward from it. Locked nodes open when the node beneath them is done."}
@@ -420,7 +420,7 @@ export default function GoalTreePage() {
   if (!goal) {
     return (
       <div className="py-16 text-center">
-        <p className="text-zinc-600 dark:text-zinc-400">Goal not found.</p>
+        <p className="text-gray-300">Goal not found.</p>
         <Link href="/" className="mt-3 inline-block underline">
           Back to goals
         </Link>
@@ -435,31 +435,31 @@ export default function GoalTreePage() {
 
   return (
     <div>
-      <Link href="/" className="text-sm text-zinc-500 hover:underline">
+      <Link href="/" className="text-sm text-gray-400 hover:underline">
         ← Goals
       </Link>
       <div className="mt-1 flex items-baseline justify-between gap-3">
         <h1 className="text-2xl font-bold">{goal.identity}</h1>
-        <span className="shrink-0 text-xs uppercase tracking-wide text-zinc-400">
+        <span className="shrink-0 text-xs uppercase tracking-wide text-gray-500">
           {goal.structure}
         </span>
       </div>
       {milestones.length > 0 && (
         <div className="mt-3 flex items-center gap-3">
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-navy-800">
             <div
-              className="h-full rounded-full bg-emerald-500 transition-all"
+              className="h-full rounded-full bg-gold-500 transition-all"
               style={{ width: `${Math.round((done / milestones.length) * 100)}%` }}
             />
           </div>
-          <span className="shrink-0 text-xs text-zinc-500">
+          <span className="shrink-0 text-xs text-gray-400">
             {done}/{milestones.length}
           </span>
         </div>
       )}
 
       {milestones.length === 0 && (
-        <p className="mt-6 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-6 text-gray-300">
           {goal.structure === "linear" &&
             "Break this goal into milestones — the levels you'll climb on the way. Start with the first small win."}
           {goal.structure === "pyramid" &&

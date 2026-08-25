@@ -1,26 +1,28 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Brand palette: navy ground, gray text, gold accent */
+@theme {
+  --color-navy-500: #7186b8;
+  --color-navy-600: #56679a;
+  --color-navy-700: #475681;
+  --color-navy-800: #3a486e;
+  --color-navy-900: #2f3c5e;
+  --color-navy-950: #26324f;
+
+  --color-gold-300: #ecd08a;
+  --color-gold-400: #e0bb62;
+  --color-gold-500: #cfa544;
+  --color-gold-600: #a98432;
+  --color-gold-700: #7c6023;
+  --color-gold-900: #453511;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* slightly larger type everywhere — all rem-based sizes scale from this */
+html {
+  font-size: 17px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #26324f;
+  color: #f3f4f6;
 }

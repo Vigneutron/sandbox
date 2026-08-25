@@ -19,7 +19,7 @@ export default function AccountPage() {
     return (
       <div className="py-16 text-center">
         <h1 className="text-2xl font-bold">Accounts coming soon</h1>
-        <p className="mx-auto mt-3 max-w-md text-zinc-600 dark:text-zinc-400">
+        <p className="mx-auto mt-3 max-w-md text-gray-300">
           Cloud sync isn&apos;t configured on this deployment yet. Your goals
           are saved in this browser in the meantime.
         </p>
@@ -31,17 +31,17 @@ export default function AccountPage() {
     return (
       <div className="mx-auto max-w-md py-8 text-center">
         <h1 className="text-2xl font-bold">Your account</h1>
-        <p className="mt-3 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-3 text-gray-300">
           Signed in as <span className="font-medium">{user.email}</span>. Your
           goals and streaks sync to every device you sign in on.
         </p>
         <button
           onClick={signOut}
-          className="mt-6 rounded-lg border border-zinc-300 px-5 py-2.5 font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          className="mt-6 rounded-lg border border-gray-600 px-5 py-2.5 font-medium hover:bg-navy-800"
         >
           Sign out
         </button>
-        <p className="mt-3 text-xs text-zinc-400">
+        <p className="mt-3 text-xs text-gray-500">
           Signing out clears this device&apos;s copy — your data stays safe in
           your account.
         </p>
@@ -53,7 +53,7 @@ export default function AccountPage() {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
         <h1 className="text-2xl font-bold">Check your email 📬</h1>
-        <p className="mt-3 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-3 text-gray-300">
           We sent a confirmation link to{" "}
           <span className="font-medium">{pendingEmail}</span>. Click it and
           you&apos;ll be signed in automatically. (Check spam if it&apos;s not
@@ -69,7 +69,7 @@ export default function AccountPage() {
               if (err) setMessage(err);
               else setResent(true);
             }}
-            className="rounded-lg border border-zinc-300 px-5 py-2 text-sm font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="rounded-lg border border-gray-600 px-5 py-2 text-sm font-medium hover:bg-navy-800 disabled:opacity-50"
           >
             {resent ? "Sent again ✓" : "Resend email"}
           </button>
@@ -79,7 +79,7 @@ export default function AccountPage() {
               setResent(false);
               setMessage(null);
             }}
-            className="text-sm text-zinc-500 hover:underline"
+            className="text-sm text-gray-400 hover:underline"
           >
             Use a different email
           </button>
@@ -110,13 +110,13 @@ export default function AccountPage() {
   return (
     <div className="mx-auto max-w-md py-8">
       <h1 className="text-center text-2xl font-bold">Sign in</h1>
-      <p className="mt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-2 text-center text-sm text-gray-300">
         Create a free account to sync your goals across devices. Anything
         already on this device comes with you.
       </p>
 
       <form
-        className="mt-6 space-y-3 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+        className="mt-6 space-y-3 rounded-lg border border-gray-700 bg-navy-900 p-5"
         onSubmit={(e) => {
           e.preventDefault();
           submit("in");
@@ -130,7 +130,7 @@ export default function AccountPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-700"
+            className="mt-1 w-full rounded-md border border-gray-600 bg-transparent px-3 py-2"
           />
         </label>
         <label className="block text-sm">
@@ -142,12 +142,12 @@ export default function AccountPage() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-700"
+            className="mt-1 w-full rounded-md border border-gray-600 bg-transparent px-3 py-2"
           />
         </label>
 
         {message && (
-          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          <p className="rounded-md bg-navy-800 px-3 py-2 text-sm text-gold-300">
             {message}
           </p>
         )}
@@ -156,7 +156,7 @@ export default function AccountPage() {
           <button
             type="submit"
             disabled={busy}
-            className="flex-1 rounded-md bg-zinc-900 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            className="flex-1 rounded-md bg-gold-500 py-2 text-sm font-medium text-navy-950 hover:bg-gold-400 disabled:opacity-50"
           >
             Sign in
           </button>
@@ -164,7 +164,7 @@ export default function AccountPage() {
             type="button"
             disabled={busy}
             onClick={() => submit("up")}
-            className="flex-1 rounded-md border border-zinc-300 py-2 text-sm font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="flex-1 rounded-md border border-gray-600 py-2 text-sm font-medium hover:bg-navy-800 disabled:opacity-50"
           >
             Create account
           </button>

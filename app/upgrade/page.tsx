@@ -68,7 +68,7 @@ export default function UpgradePage() {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
         <h1 className="text-2xl font-bold">You&apos;re on Goal Goal Gadget Pro 🎉</h1>
-        <p className="mt-3 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-3 text-gray-300">
           Unlimited goals, no ads. Thanks for supporting Goal Goal Gadget.
         </p>
         <button
@@ -80,11 +80,11 @@ export default function UpgradePage() {
             if (url) window.location.href = url;
             else setMessage(error ?? "Something went wrong.");
           }}
-          className="mt-6 rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          className="mt-6 rounded-lg border border-gray-600 px-5 py-2.5 text-sm font-medium hover:bg-navy-800 disabled:opacity-50"
         >
           Manage subscription
         </button>
-        {message && <p className="mt-3 text-sm text-zinc-500">{message}</p>}
+        {message && <p className="mt-3 text-sm text-gray-400">{message}</p>}
       </div>
     );
   }
@@ -93,7 +93,7 @@ export default function UpgradePage() {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
         <h1 className="text-2xl font-bold">Payment received</h1>
-        <p className="mt-3 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-3 text-gray-300">
           Activating your Pro membership — this usually takes a few seconds…
         </p>
       </div>
@@ -103,20 +103,20 @@ export default function UpgradePage() {
   return (
     <div className="mx-auto max-w-md py-8">
       <h1 className="text-center text-2xl font-bold">Goal Goal Gadget Pro</h1>
-      <p className="mt-2 text-center text-zinc-600 dark:text-zinc-400">
+      <p className="mt-2 text-center text-gray-300">
         The free plan includes {FREE_GOAL_LIMIT} goals with ads. Pro removes
         every limit for less than a coffee.
       </p>
 
-      <div className="mt-6 rounded-xl border border-amber-300 bg-white p-6 dark:border-amber-700 dark:bg-zinc-900">
+      <div className="mt-6 rounded-xl border border-gold-600 bg-navy-900 p-6">
         <p className="text-center">
           <span className="text-4xl font-bold">$3</span>
-          <span className="text-zinc-500">/month</span>
+          <span className="text-gray-400">/month</span>
         </p>
         <ul className="mt-4 space-y-2 text-sm">
           {PERKS.map((perk) => (
             <li key={perk} className="flex gap-2">
-              <span className="text-emerald-600">✓</span>
+              <span className="text-gold-400">✓</span>
               {perk}
             </li>
           ))}
@@ -136,25 +136,25 @@ export default function UpgradePage() {
               setBusy(false);
               setMessage(error ?? "Something went wrong.");
             }}
-            className="mt-6 w-full rounded-lg bg-amber-500 py-2.5 font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+            className="mt-6 w-full rounded-lg bg-gold-500 py-2.5 font-medium text-navy-950 hover:bg-gold-400 disabled:opacity-50"
           >
             {busy ? "Opening checkout…" : "Upgrade to Pro"}
           </button>
         ) : (
           <Link
             href="/account"
-            className="mt-6 block w-full rounded-lg bg-amber-500 py-2.5 text-center font-medium text-white hover:bg-amber-600"
+            className="mt-6 block w-full rounded-lg bg-gold-500 py-2.5 text-center font-medium text-navy-950 hover:bg-gold-400"
           >
             Sign in to upgrade
           </Link>
         )}
 
         {message && (
-          <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-center text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          <p className="mt-3 rounded-md bg-navy-800 px-3 py-2 text-center text-sm text-gold-300">
             {message}
           </p>
         )}
-        <p className="mt-3 text-center text-xs text-zinc-400">
+        <p className="mt-3 text-center text-xs text-gray-500">
           Secure checkout by Stripe. Cancel anytime.
         </p>
       </div>
