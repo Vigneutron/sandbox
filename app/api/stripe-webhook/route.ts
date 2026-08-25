@@ -8,10 +8,10 @@ import { createClient } from "@supabase/supabase-js";
  * denies profile writes to everyone else).
  */
 export async function POST(req: NextRequest) {
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const stripeKey = process.env.STRIPE_SECRET_KEY?.trim();
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!stripeKey || !webhookSecret || !url || !serviceKey) {
     return new NextResponse("Billing not configured", { status: 503 });
   }

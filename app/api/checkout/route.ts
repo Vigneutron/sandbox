@@ -3,8 +3,9 @@ import Stripe from "stripe";
 import { getUserFromRequest } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  const priceId = process.env.STRIPE_PRICE_ID;
+  // trim: whitespace/newlines sneak in when pasting env vars on mobile
+  const stripeKey = process.env.STRIPE_SECRET_KEY?.trim();
+  const priceId = process.env.STRIPE_PRICE_ID?.trim();
   if (!stripeKey || !priceId) {
     return NextResponse.json(
       { error: "Billing isn't configured on this deployment yet." },
