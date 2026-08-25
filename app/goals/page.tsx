@@ -10,55 +10,36 @@ import { AdBanner } from "@/components/AdBanner";
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
-function GoalForm({ onDone }: { onDone: () => void }) {
+function GoalForm() {
   const { addGoal } = useApp();
   const [identity, setIdentity] = useState("");
-  const [why, setWhy] = useState("");
 
   return (
     <form
-      className="mt-3 space-y-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+      className="mt-4 flex items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         if (!identity.trim()) return;
-        addGoal(identity, why);
-        onDone();
+        addGoal(identity, "");
+        setIdentity("");
       }}
     >
-      <label className="block text-sm">
-        <span className="font-medium">I am becoming…</span>
+      <label className="flex flex-1 items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 focus-within:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+        <span className="shrink-0 text-sm text-zinc-500">I am becoming</span>
         <input
-          autoFocus
           value={identity}
           onChange={(e) => setIdentity(e.target.value)}
-          placeholder="a runner / a writer / someone who ships"
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-700"
+          placeholder="a runner…"
+          className="w-full bg-transparent outline-none"
         />
       </label>
-      <label className="block text-sm">
-        <span className="font-medium">Why it matters (optional)</span>
-        <input
-          value={why}
-          onChange={(e) => setWhy(e.target.value)}
-          placeholder="Energy to keep up with my kids"
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-700"
-        />
-      </label>
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-        >
-          Add goal
-        </button>
-        <button
-          type="button"
-          onClick={onDone}
-          className="rounded-md px-4 py-2 text-sm text-zinc-500 hover:underline"
-        >
-          Cancel
-        </button>
-      </div>
+      <button
+        type="submit"
+        disabled={!identity.trim()}
+        className="shrink-0 rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+      >
+        Add
+      </button>
     </form>
   );
 }
@@ -147,38 +128,29 @@ function HabitForm({ goal, onDone }: { goal: Goal; onDone: () => void }) {
 
 export default function GoalsPage() {
   const { state, ready, canAddGoal, deleteGoal, deleteHabit } = useApp();
-  const [addingGoal, setAddingGoal] = useState(false);
   const [addingHabitFor, setAddingHabitFor] = useState<string | null>(null);
 
   if (!ready) return null;
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Goals</h1>
-        {canAddGoal ? (
-          <button
-            onClick={() => setAddingGoal(true)}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-          >
-            + New goal
-          </button>
-        ) : (
-          <Link
-            href="/upgrade"
-            className="rounded-md border border-amber-500 px-4 py-2 text-sm font-medium text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950"
-          >
-            Free plan: {FREE_GOAL_LIMIT} goals max — go Pro
-          </Link>
-        )}
-      </div>
+      <h1 className="text-2xl font-bold">Goals</h1>
 
-      {addingGoal && <GoalForm onDone={() => setAddingGoal(false)} />}
+      {canAddGoal ? (
+        <GoalForm />
+      ) : (
+        <Link
+          href="/upgrade"
+          className="mt-4 block rounded-lg border border-amber-500 px-4 py-2 text-center text-sm font-medium text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950"
+        >
+          Free plan: {FREE_GOAL_LIMIT} goals max — go Pro for unlimited
+        </Link>
+      )}
 
-      {state.goals.length === 0 && !addingGoal && (
+      {state.goals.length === 0 && (
         <p className="mt-6 text-zinc-600 dark:text-zinc-400">
-          No goals yet. Decide who you want to become, then build the smallest
-          habit that proves it.
+          Decide who you want to become, then build the smallest habit that
+          proves it.
         </p>
       )}
 
