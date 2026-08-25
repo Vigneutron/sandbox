@@ -4,11 +4,14 @@ import { useState } from "react";
 import { useApp } from "@/lib/store";
 
 export default function AccountPage() {
-  const { user, ready, cloudEnabled, signIn, signUp, signOut } = useApp();
+  const { user, ready, cloudEnabled, signIn, signUp, resendConfirmation, signOut } =
+    useApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [resent, setResent] = useState(false);
 
   if (!ready) return null;
 
@@ -46,12 +49,62 @@ export default function AccountPage() {
     );
   }
 
+  if (pendingEmail) {
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <h1 className="text-2xl font-bold">Check your email 📬</h1>
+        <p className="mt-3 text-zinc-600 dark:text-zinc-400">
+          We sent a confirmation link to{" "}
+          <span className="font-medium">{pendingEmail}</span>. Click it and
+          you&apos;ll be signed in automatically. (Check spam if it&apos;s not
+          there in a minute.)
+        </p>
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <button
+            disabled={busy || resent}
+            onClick={async () => {
+              setBusy(true);
+              const err = await resendConfirmation(pendingEmail);
+              setBusy(false);
+              if (err) setMessage(err);
+              else setResent(true);
+            }}
+            className="rounded-lg border border-zinc-300 px-5 py-2 text-sm font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            {resent ? "Sent again ✓" : "Resend email"}
+          </button>
+          <button
+            onClick={() => {
+              setPendingEmail(null);
+              setResent(false);
+              setMessage(null);
+            }}
+            className="text-sm text-zinc-500 hover:underline"
+          >
+            Use a different email
+          </button>
+        </div>
+        {message && <p className="mt-3 text-sm text-red-600">{message}</p>}
+      </div>
+    );
+  }
+
   const submit = async (mode: "in" | "up") => {
     setBusy(true);
     setMessage(null);
-    const err = mode === "in" ? await signIn(email, password) : await signUp(email, password);
+    if (mode === "in") {
+      const err = await signIn(email, password);
+      setMessage(
+        err === "Email not confirmed"
+          ? "This email hasn't been confirmed yet — check your inbox for the confirmation link."
+          : err
+      );
+    } else {
+      const { error, needsConfirmation } = await signUp(email, password);
+      if (error) setMessage(error);
+      else if (needsConfirmation) setPendingEmail(email);
+    }
     setBusy(false);
-    setMessage(err);
   };
 
   return (

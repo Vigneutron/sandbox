@@ -67,7 +67,11 @@ interface AppContextValue {
   deleteMilestone: (milestoneId: string) => void;
   /** re-reads Pro status from the database (e.g. after Stripe checkout) */
   refreshPro: () => Promise<void>;
-  signUp: (email: string, password: string) => Promise<string | null>;
+  signUp: (
+    email: string,
+    password: string
+  ) => Promise<{ error: string | null; needsConfirmation: boolean }>;
+  resendConfirmation: (email: string) => Promise<string | null>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 }
@@ -341,11 +345,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string) => {
     const sb = getSupabase();
+    if (!sb)
+      return { error: "Accounts are not configured yet.", needsConfirmation: false };
+    const { data, error } = await sb.auth.signUp({
+      email,
+      password,
+      // the confirmation link lands back on the account page, where the
+      // client picks up the session automatically
+      options: { emailRedirectTo: `${window.location.origin}/account` },
+    });
+    if (error) return { error: error.message, needsConfirmation: false };
+    return { error: null, needsConfirmation: !data.session };
+  }, []);
+
+  const resendConfirmation = useCallback(async (email: string) => {
+    const sb = getSupabase();
     if (!sb) return "Accounts are not configured yet.";
-    const { data, error } = await sb.auth.signUp({ email, password });
-    if (error) return error.message;
-    if (!data.session) return "Check your email to confirm your account, then sign in.";
-    return null;
+    const { error } = await sb.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/account` },
+    });
+    return error ? error.message : null;
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -381,6 +402,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteMilestone,
         refreshPro,
         signUp,
+        resendConfirmation,
         signIn,
         signOut,
       }}
