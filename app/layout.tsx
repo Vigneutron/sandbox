@@ -9,7 +9,7 @@ const geist = Geist({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Goal Goal Gadget",
   description:
-    "Goal management for ambitious people. Tiny habits, real momentum — get 1% better every day.",
+    "Goal management for ambitious people. Break big goals into milestone trees and clear them level by level.",
 };
 
 export default function RootLayout({
@@ -26,14 +26,11 @@ export default function RootLayout({
               <Link href="/" className="text-lg font-bold tracking-tight">
                 Goal Goal Gadget{" "}
                 <span className="hidden text-sm font-normal text-zinc-500 sm:inline">
-                  1% better every day
+                  level up your goals
                 </span>
               </Link>
               <nav className="flex gap-4 text-sm">
                 <Link href="/" className="hover:underline">
-                  Today
-                </Link>
-                <Link href="/goals" className="hover:underline">
                   Goals
                 </Link>
                 <Link href="/account" className="hover:underline">

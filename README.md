@@ -1,8 +1,11 @@
 # Goal Goal Gadget
 
-Goal management for ambitious people. Built on habit-science principles:
-identity-based goals, tiny two-minute habits, implementation intentions
-("After X, I will Y"), and streaks — get 1% better every day.
+Goal management for ambitious people. Each goal opens a milestone tree —
+a video-game-style level path you clear node by node, with a highlighted
+"current level" and progress tracked per goal.
+
+(The earlier tiny-habits/streaks feature was removed from the UI but lives
+in git history if it returns as an optional layer.)
 
 ## Business model
 
@@ -19,7 +22,8 @@ pending Stripe integration.
 ### Supabase setup
 
 1. Create a free project at supabase.com
-2. Run `supabase/schema.sql` in the SQL Editor
+2. Run `supabase/schema.sql`, then `supabase/milestones-migration.sql`,
+   in the SQL Editor
 3. Authentication → Sign In / Providers → Email: disable "Confirm email"
    (or keep it on and users confirm via email before signing in)
 4. Copy the Project URL and anon key from Project Settings → API into the

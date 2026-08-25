@@ -1,117 +1,112 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/lib/store";
-import { todayKey, isDueOn } from "@/lib/dates";
-import { currentStreak } from "@/lib/streaks";
+import { FREE_GOAL_LIMIT } from "@/lib/types";
 import { AdBanner } from "@/components/AdBanner";
 
-export default function TodayPage() {
-  const { state, ready, toggleToday } = useApp();
+function GoalForm() {
+  const { addGoal } = useApp();
+  const [title, setTitle] = useState("");
+
+  return (
+    <form
+      className="mt-4 flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+        addGoal(title);
+        setTitle("");
+      }}
+    >
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Become a millionaire"
+        className="w-full flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+      />
+      <button
+        type="submit"
+        disabled={!title.trim()}
+        className="shrink-0 rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+      >
+        Add
+      </button>
+    </form>
+  );
+}
+
+export default function DashboardPage() {
+  const { state, ready, canAddGoal, deleteGoal } = useApp();
 
   if (!ready) return null;
 
-  const today = new Date();
-  const key = todayKey();
-  const dueHabits = state.habits.filter((h) => isDueOn(h.days, today));
-  const doneCount = dueHabits.filter((h) =>
-    (state.completions[h.id] ?? []).includes(key)
-  ).length;
-
-  if (state.goals.length === 0) {
-    return (
-      <div className="py-16 text-center">
-        <h1 className="text-2xl font-bold">Welcome to Goal Goal Gadget</h1>
-        <p className="mx-auto mt-3 max-w-md text-zinc-600 dark:text-zinc-400">
-          Every action you take is a vote for the person you want to become.
-          Start by naming who that is.
-        </p>
-        <Link
-          href="/goals"
-          className="mt-6 inline-block rounded-lg bg-zinc-900 px-5 py-2.5 font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-        >
-          Create your first goal
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <div>
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">Today</h1>
-        {dueHabits.length > 0 && (
-          <span className="text-sm text-zinc-500">
-            {doneCount}/{dueHabits.length} done
-          </span>
-        )}
-      </div>
-
-      {dueHabits.length === 0 && (
-        <p className="mt-6 text-zinc-600 dark:text-zinc-400">
-          Nothing scheduled today. Rest is part of the system — or{" "}
-          <Link href="/goals" className="underline">
-            add a habit
-          </Link>
-          .
-        </p>
+      {state.goals.length === 0 ? (
+        <div className="pt-12 text-center">
+          <h1 className="text-2xl font-bold">Welcome to Goal Goal Gadget</h1>
+          <p className="mx-auto mt-3 max-w-md text-zinc-600 dark:text-zinc-400">
+            Name a big goal, then break it into milestones — a level tree you
+            climb one node at a time.
+          </p>
+        </div>
+      ) : (
+        <h1 className="text-2xl font-bold">Goals</h1>
       )}
 
-      <div className="mt-4 space-y-6">
+      {canAddGoal ? (
+        <GoalForm />
+      ) : (
+        <Link
+          href="/upgrade"
+          className="mt-4 block rounded-lg border border-amber-500 px-4 py-2 text-center text-sm font-medium text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950"
+        >
+          Free plan: {FREE_GOAL_LIMIT} goals max — go Pro for unlimited
+        </Link>
+      )}
+
+      <div className="mt-6 space-y-3">
         {state.goals.map((goal) => {
-          const habits = dueHabits.filter((h) => h.goalId === goal.id);
-          if (habits.length === 0) return null;
+          const milestones = state.milestones.filter((m) => m.goalId === goal.id);
+          const done = milestones.filter((m) => m.completedAt).length;
+          const pct =
+            milestones.length === 0 ? 0 : Math.round((done / milestones.length) * 100);
           return (
-            <section key={goal.id}>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-                {goal.identity}
-              </h2>
-              <ul className="mt-2 space-y-2">
-                {habits.map((habit) => {
-                  const done = (state.completions[habit.id] ?? []).includes(key);
-                  const streak = currentStreak(habit, state.completions);
-                  return (
-                    <li key={habit.id}>
-                      <button
-                        onClick={() => toggleToday(habit.id)}
-                        className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
-                          done
-                            ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950"
-                            : "border-zinc-200 bg-white hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
-                        }`}
-                      >
-                        <span
-                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm ${
-                            done
-                              ? "border-emerald-500 bg-emerald-500 text-white"
-                              : "border-zinc-300 dark:border-zinc-600"
-                          }`}
-                        >
-                          {done ? "✓" : ""}
-                        </span>
-                        <span className="flex-1">
-                          <span
-                            className={done ? "line-through opacity-60" : ""}
-                          >
-                            {habit.title}
-                          </span>
-                          {habit.cue && (
-                            <span className="block text-sm text-zinc-500">
-                              After {habit.cue}
-                            </span>
-                          )}
-                        </span>
-                        {streak > 0 && (
-                          <span className="shrink-0 text-sm font-medium text-amber-600 dark:text-amber-400">
-                            {streak} day{streak === 1 ? "" : "s"} 🔥
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
+            <div
+              key={goal.id}
+              className="relative rounded-lg border border-zinc-200 bg-white transition hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+            >
+              <Link href={`/goal/${goal.id}`} className="block p-4 pr-12">
+                <h2 className="font-semibold">{goal.identity}</h2>
+                <div className="mt-2 flex items-center gap-3">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="shrink-0 text-xs text-zinc-500">
+                    {milestones.length === 0
+                      ? "No milestones yet"
+                      : `${done}/${milestones.length}`}
+                  </span>
+                </div>
+              </Link>
+              <button
+                onClick={() => {
+                  if (
+                    confirm(`Delete "${goal.identity}"? This can't be undone.`)
+                  )
+                    deleteGoal(goal.id);
+                }}
+                aria-label={`Delete ${goal.identity}`}
+                className="absolute right-3 top-3 p-1 text-zinc-400 hover:text-red-600"
+              >
+                ✕
+              </button>
+            </div>
           );
         })}
       </div>

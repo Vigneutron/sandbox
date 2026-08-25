@@ -9,13 +9,12 @@ import {
   useCallback,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { AppState, Goal, Habit, FREE_GOAL_LIMIT } from "./types";
-import { todayKey } from "./dates";
+import { AppState, Goal, Milestone, FREE_GOAL_LIMIT } from "./types";
 import { getSupabase } from "./supabase";
 
 const STORAGE_KEY = "goal-goal-gadget-v1";
 
-const EMPTY: AppState = { goals: [], habits: [], completions: {}, pro: false };
+const EMPTY: AppState = { goals: [], milestones: [], pro: false };
 
 function loadLocal(): AppState {
   try {
@@ -24,8 +23,7 @@ function loadLocal(): AppState {
     const parsed = JSON.parse(raw) as Partial<AppState>;
     return {
       goals: parsed.goals ?? [],
-      habits: parsed.habits ?? [],
-      completions: parsed.completions ?? {},
+      milestones: parsed.milestones ?? [],
       pro: parsed.pro ?? false,
     };
   } catch {
@@ -49,11 +47,11 @@ interface AppContextValue {
   /** true when Supabase env vars are configured */
   cloudEnabled: boolean;
   user: User | null;
-  addGoal: (identity: string, why: string) => void;
+  addGoal: (title: string) => string;
   deleteGoal: (goalId: string) => void;
-  addHabit: (goalId: string, title: string, cue: string, days: number[]) => void;
-  deleteHabit: (habitId: string) => void;
-  toggleToday: (habitId: string) => void;
+  addMilestone: (goalId: string, title: string) => void;
+  toggleMilestone: (milestoneId: string) => void;
+  deleteMilestone: (milestoneId: string) => void;
   /** re-reads Pro status from the database (e.g. after Stripe checkout) */
   refreshPro: () => Promise<void>;
   signUp: (email: string, password: string) => Promise<string | null>;
@@ -101,22 +99,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     (async () => {
-      const [g, h, c, p] = await Promise.all([
+      const [g, m, p] = await Promise.all([
         sb.from("goals").select("*").order("created_at"),
-        sb.from("habits").select("*").order("created_at"),
-        sb.from("completions").select("habit_id,date"),
+        sb.from("milestones").select("*").order("position"),
         sb.from("profiles").select("pro").maybeSingle(),
       ]);
-      if (g.error || h.error || c.error) {
-        console.error(
-          "supabase load:",
-          g.error?.message ?? h.error?.message ?? c.error?.message
-        );
+      if (g.error || m.error) {
+        console.error("supabase load:", g.error?.message ?? m.error?.message);
         return;
       }
 
       const local = loadLocal();
-      const cloudEmpty = g.data.length === 0 && h.data.length === 0;
+      const cloudEmpty = g.data.length === 0;
 
       if (cloudEmpty && local.goals.length > 0) {
         await sb
@@ -131,44 +125,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }))
           )
           .then(logError("migrate goals"));
-        if (local.habits.length > 0) {
+        if (local.milestones.length > 0) {
           await sb
-            .from("habits")
+            .from("milestones")
             .insert(
-              local.habits.map((habit) => ({
-                id: habit.id,
+              local.milestones.map((ms) => ({
+                id: ms.id,
                 user_id: user.id,
-                goal_id: habit.goalId,
-                title: habit.title,
-                cue: habit.cue,
-                days: habit.days,
-                created_at: habit.createdAt,
+                goal_id: ms.goalId,
+                title: ms.title,
+                position: ms.position,
+                completed_at: ms.completedAt,
+                created_at: ms.createdAt,
               }))
             )
-            .then(logError("migrate habits"));
-        }
-        const rows = Object.entries(local.completions).flatMap(
-          ([habitId, dates]) =>
-            dates.map((date) => ({
-              habit_id: habitId,
-              user_id: user.id,
-              date,
-            }))
-        );
-        if (rows.length > 0) {
-          await sb
-            .from("completions")
-            .insert(rows)
-            .then(logError("migrate completions"));
+            .then(logError("migrate milestones"));
         }
         if (!cancelled) setState({ ...local, pro: p.data?.pro ?? false });
         return;
       }
 
-      const completions: Record<string, string[]> = {};
-      for (const row of c.data as { habit_id: string; date: string }[]) {
-        (completions[row.habit_id] ??= []).push(row.date);
-      }
       if (!cancelled) {
         setState({
           goals: g.data.map((r) => ({
@@ -177,15 +153,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             why: r.why ?? "",
             createdAt: r.created_at,
           })),
-          habits: h.data.map((r) => ({
+          milestones: m.data.map((r) => ({
             id: r.id,
             goalId: r.goal_id,
             title: r.title,
-            cue: r.cue ?? "",
-            days: r.days,
+            position: r.position,
+            completedAt: r.completed_at,
             createdAt: r.created_at,
           })),
-          completions,
           pro: p.data?.pro ?? false,
         });
       }
@@ -206,11 +181,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state, ready]);
 
   const addGoal = useCallback(
-    (identity: string, why: string) => {
+    (title: string) => {
       const goal: Goal = {
         id: crypto.randomUUID(),
-        identity: identity.trim(),
-        why: why.trim(),
+        identity: title.trim(),
+        why: "",
         createdAt: new Date().toISOString(),
       };
       setState((s) => ({ ...s, goals: [...s.goals, goal] }));
@@ -226,109 +201,97 @@ export function AppProvider({ children }: { children: ReactNode }) {
           })
           .then(logError("add goal"));
       }
+      return goal.id;
     },
     [user]
   );
 
   const deleteGoal = useCallback(
     (goalId: string) => {
-      setState((s) => {
-        const removed = new Set(
-          s.habits.filter((h) => h.goalId === goalId).map((h) => h.id)
-        );
-        const completions = Object.fromEntries(
-          Object.entries(s.completions).filter(([id]) => !removed.has(id))
-        );
-        return {
-          ...s,
-          goals: s.goals.filter((g) => g.id !== goalId),
-          habits: s.habits.filter((h) => h.goalId !== goalId),
-          completions,
-        };
-      });
+      setState((s) => ({
+        ...s,
+        goals: s.goals.filter((g) => g.id !== goalId),
+        milestones: s.milestones.filter((m) => m.goalId !== goalId),
+      }));
       const sb = getSupabase();
       if (sb && user) {
-        // habits/completions cascade in the database
+        // milestones cascade in the database
         sb.from("goals").delete().eq("id", goalId).then(logError("delete goal"));
       }
     },
     [user]
   );
 
-  const addHabit = useCallback(
-    (goalId: string, title: string, cue: string, days: number[]) => {
-      const habit: Habit = {
+  const addMilestone = useCallback(
+    (goalId: string, title: string) => {
+      const position =
+        Math.max(
+          0,
+          ...state.milestones
+            .filter((m) => m.goalId === goalId)
+            .map((m) => m.position)
+        ) + 1;
+      const milestone: Milestone = {
         id: crypto.randomUUID(),
         goalId,
         title: title.trim(),
-        cue: cue.trim(),
-        days: [...days].sort(),
+        position,
+        completedAt: null,
         createdAt: new Date().toISOString(),
       };
-      setState((s) => ({ ...s, habits: [...s.habits, habit] }));
+      setState((s) => ({ ...s, milestones: [...s.milestones, milestone] }));
       const sb = getSupabase();
       if (sb && user) {
-        sb.from("habits")
+        sb.from("milestones")
           .insert({
-            id: habit.id,
+            id: milestone.id,
             user_id: user.id,
-            goal_id: habit.goalId,
-            title: habit.title,
-            cue: habit.cue,
-            days: habit.days,
-            created_at: habit.createdAt,
+            goal_id: milestone.goalId,
+            title: milestone.title,
+            position: milestone.position,
+            completed_at: null,
+            created_at: milestone.createdAt,
           })
-          .then(logError("add habit"));
+          .then(logError("add milestone"));
       }
     },
-    [user]
+    [user, state.milestones]
   );
 
-  const deleteHabit = useCallback(
-    (habitId: string) => {
-      setState((s) => {
-        const completions = { ...s.completions };
-        delete completions[habitId];
-        return {
-          ...s,
-          habits: s.habits.filter((h) => h.id !== habitId),
-          completions,
-        };
-      });
+  const toggleMilestone = useCallback(
+    (milestoneId: string) => {
+      const target = state.milestones.find((m) => m.id === milestoneId);
+      if (!target) return;
+      const completedAt = target.completedAt ? null : new Date().toISOString();
+      setState((s) => ({
+        ...s,
+        milestones: s.milestones.map((m) =>
+          m.id === milestoneId ? { ...m, completedAt } : m
+        ),
+      }));
       const sb = getSupabase();
       if (sb && user) {
-        sb.from("habits")
+        sb.from("milestones")
+          .update({ completed_at: completedAt })
+          .eq("id", milestoneId)
+          .then(logError("toggle milestone"));
+      }
+    },
+    [user, state.milestones]
+  );
+
+  const deleteMilestone = useCallback(
+    (milestoneId: string) => {
+      setState((s) => ({
+        ...s,
+        milestones: s.milestones.filter((m) => m.id !== milestoneId),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("milestones")
           .delete()
-          .eq("id", habitId)
-          .then(logError("delete habit"));
-      }
-    },
-    [user]
-  );
-
-  const toggleToday = useCallback(
-    (habitId: string) => {
-      const key = todayKey();
-      let added = false;
-      setState((s) => {
-        const dates = s.completions[habitId] ?? [];
-        added = !dates.includes(key);
-        const next = added ? [...dates, key] : dates.filter((d) => d !== key);
-        return { ...s, completions: { ...s.completions, [habitId]: next } };
-      });
-      const sb = getSupabase();
-      if (sb && user) {
-        if (added) {
-          sb.from("completions")
-            .upsert({ habit_id: habitId, user_id: user.id, date: key })
-            .then(logError("complete habit"));
-        } else {
-          sb.from("completions")
-            .delete()
-            .eq("habit_id", habitId)
-            .eq("date", key)
-            .then(logError("uncomplete habit"));
-        }
+          .eq("id", milestoneId)
+          .then(logError("delete milestone"));
       }
     },
     [user]
@@ -378,9 +341,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         user,
         addGoal,
         deleteGoal,
-        addHabit,
-        deleteHabit,
-        toggleToday,
+        addMilestone,
+        toggleMilestone,
+        deleteMilestone,
         refreshPro,
         signUp,
         signIn,
