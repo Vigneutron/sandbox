@@ -1,10 +1,11 @@
 /**
- * How a goal's milestones are organized:
+ * How a goal is organized:
  * - linear: a straight path, one milestone after another
  * - pyramid: nested sub-goals under one root goal
  * - tree: like a game skill tree — completing a node unlocks its children
+ * - habit: repeats on a weekly schedule with streaks; no milestones
  */
-export type GoalStructure = "linear" | "pyramid" | "tree";
+export type GoalStructure = "linear" | "pyramid" | "tree" | "habit";
 
 export interface Goal {
   id: string;
@@ -13,6 +14,10 @@ export interface Goal {
   /** legacy field, no longer collected but still displayed if present */
   why: string;
   structure: GoalStructure;
+  /** habit goals: scheduled weekdays (0 = Sunday … 6 = Saturday); null otherwise */
+  days: number[] | null;
+  /** habit goals: stacking cue, shown as "After {cue}, I will {title}" */
+  cue: string;
   createdAt: string;
 }
 
@@ -31,6 +36,8 @@ export interface Milestone {
 export interface AppState {
   goals: Goal[];
   milestones: Milestone[];
+  /** habit goalId -> completed dates as YYYY-MM-DD keys */
+  habitCompletions: Record<string, string[]>;
   pro: boolean;
 }
 

@@ -18,6 +18,7 @@ const STRUCTURE_ICON: Record<GoalStructure, string> = {
   linear: "→",
   pyramid: "△",
   tree: "⑂",
+  habit: "↻",
 };
 
 export default function LibraryPage() {

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useApp } from "@/lib/store";
 import { FREE_GOAL_LIMIT, GoalStructure } from "@/lib/types";
 import { AdBanner } from "@/components/AdBanner";
+import { isDueOn, todayKey } from "@/lib/dates";
+import { currentStreak } from "@/lib/habits";
 
 const STRUCTURES: { key: GoalStructure; label: string; icon: string; desc: string }[] = [
   {
@@ -24,6 +26,12 @@ const STRUCTURES: { key: GoalStructure; label: string; icon: string; desc: strin
     label: "Tree",
     icon: "⑂",
     desc: "Like a skill tree — completing a goal unlocks new branches above it.",
+  },
+  {
+    key: "habit",
+    label: "Habit",
+    icon: "↻",
+    desc: "Repeats on a weekly schedule — build a streak, and stack it after a routine you already have.",
   },
 ];
 
@@ -81,7 +89,8 @@ function GoalForm() {
 }
 
 export default function DashboardPage() {
-  const { state, ready, canAddGoal, deleteGoal, addSampleGoals } = useApp();
+  const { state, ready, canAddGoal, deleteGoal, addSampleGoals, toggleHabitToday } =
+    useApp();
 
   if (!ready) return null;
 
@@ -124,6 +133,61 @@ export default function DashboardPage() {
 
       <div className="mt-6 space-y-3">
         {state.goals.map((goal) => {
+          if (goal.structure === "habit") {
+            const dates = state.habitCompletions[goal.id] ?? [];
+            const days = goal.days ?? [];
+            const streak = currentStreak(days, dates, goal.createdAt);
+            const scheduledToday = isDueOn(days, new Date());
+            const doneToday = dates.includes(todayKey());
+            return (
+              <div
+                key={goal.id}
+                className="relative rounded-lg border border-gray-700 bg-navy-900 transition hover:border-gold-500"
+              >
+                <Link href={`/goal/${goal.id}`} className="block p-4 pr-24">
+                  <h2 className="font-semibold">
+                    {goal.identity}{" "}
+                    <span className="text-xs font-normal uppercase tracking-wide text-gray-500">
+                      habit
+                    </span>
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-400">
+                    {streak > 0 ? `🔥 ${streak}-day streak` : "No streak yet"}
+                    {goal.cue && <> · after {goal.cue}</>}
+                  </p>
+                </Link>
+                {scheduledToday && (
+                  <button
+                    onClick={() => toggleHabitToday(goal.id)}
+                    aria-label={
+                      doneToday
+                        ? `Un-complete ${goal.identity} today`
+                        : `Complete ${goal.identity} today`
+                    }
+                    className={`absolute right-12 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border-2 text-base font-bold transition ${
+                      doneToday
+                        ? "border-gold-400 bg-gold-500 text-ongold"
+                        : "border-gray-100 bg-navy-950 text-gray-100"
+                    }`}
+                  >
+                    {doneToday ? "✓" : "○"}
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (
+                      confirm(`Delete "${goal.identity}"? This can't be undone.`)
+                    )
+                      deleteGoal(goal.id);
+                  }}
+                  aria-label={`Delete ${goal.identity}`}
+                  className="absolute right-3 top-3 p-1 text-gray-500 hover:text-red-600"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          }
           const milestones = state.milestones.filter((m) => m.goalId === goal.id);
           const done = milestones.filter((m) => m.completedAt).length;
           const pct =

@@ -17,10 +17,16 @@ import {
   FREE_GOAL_LIMIT,
 } from "./types";
 import { getSupabase } from "./supabase";
+import { todayKey } from "./dates";
 
 const STORAGE_KEY = "goal-goal-gadget-v1";
 
-const EMPTY: AppState = { goals: [], milestones: [], pro: false };
+const EMPTY: AppState = {
+  goals: [],
+  milestones: [],
+  habitCompletions: {},
+  pro: false,
+};
 
 function loadLocal(): AppState {
   try {
@@ -32,11 +38,14 @@ function loadLocal(): AppState {
       goals: (parsed.goals ?? []).map((g) => ({
         ...g,
         structure: g.structure ?? "linear",
+        days: g.days ?? null,
+        cue: g.cue ?? "",
       })),
       milestones: (parsed.milestones ?? []).map((m) => ({
         ...m,
         parentId: m.parentId ?? null,
       })),
+      habitCompletions: parsed.habitCompletions ?? {},
       pro: parsed.pro ?? false,
     };
   } catch {
@@ -65,6 +74,10 @@ interface AppContextValue {
   addMilestone: (goalId: string, title: string, parentId?: string | null) => void;
   /** seeds one example goal of each structure, partly completed */
   addSampleGoals: () => void;
+  /** habit goals: toggle today's completion */
+  toggleHabitToday: (goalId: string) => void;
+  /** habit goals: update schedule and stacking cue */
+  updateHabitConfig: (goalId: string, days: number[], cue: string) => void;
   toggleMilestone: (milestoneId: string) => void;
   deleteMilestone: (milestoneId: string) => void;
   /** copies one of the user's goals into the public template library */
@@ -126,9 +139,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     (async () => {
-      const [g, m, p] = await Promise.all([
+      const [g, m, hc, p] = await Promise.all([
         sb.from("goals").select("*").order("created_at"),
         sb.from("milestones").select("*").order("position"),
+        sb.from("habit_completions").select("goal_id,date"),
         sb.from("profiles").select("pro").maybeSingle(),
       ]);
       if (g.error || m.error) {
@@ -149,6 +163,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               identity: goal.identity,
               why: goal.why,
               structure: goal.structure,
+              days: goal.days,
+              cue: goal.cue,
               created_at: goal.createdAt,
             }))
           )
@@ -170,6 +186,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
             )
             .then(logError("migrate milestones"));
         }
+        const completionRows = Object.entries(local.habitCompletions).flatMap(
+          ([goalId, dates]) =>
+            dates.map((date) => ({ goal_id: goalId, user_id: user.id, date }))
+        );
+        if (completionRows.length > 0) {
+          await sb
+            .from("habit_completions")
+            .insert(completionRows)
+            .then(logError("migrate habit completions"));
+        }
         if (!cancelled) setState({ ...local, pro: p.data?.pro ?? false });
         return;
       }
@@ -181,6 +207,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             identity: r.identity,
             why: r.why ?? "",
             structure: r.structure ?? "linear",
+            days: r.days ?? null,
+            cue: r.cue ?? "",
             createdAt: r.created_at,
           })),
           milestones: m.data.map((r) => ({
@@ -192,6 +220,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             completedAt: r.completed_at,
             createdAt: r.created_at,
           })),
+          habitCompletions: (
+            (hc.data ?? []) as { goal_id: string; date: string }[]
+          ).reduce<Record<string, string[]>>((acc, row) => {
+            (acc[row.goal_id] ??= []).push(row.date);
+            return acc;
+          }, {}),
           pro: p.data?.pro ?? false,
         });
       }
@@ -218,6 +252,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         identity: title.trim(),
         why: "",
         structure,
+        days: structure === "habit" ? [0, 1, 2, 3, 4, 5, 6] : null,
+        cue: "",
         createdAt: new Date().toISOString(),
       };
       setState((s) => ({ ...s, goals: [...s.goals, goal] }));
@@ -230,6 +266,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             identity: goal.identity,
             why: goal.why,
             structure: goal.structure,
+            days: goal.days,
+            cue: goal.cue,
             created_at: goal.createdAt,
           })
           .then(logError("add goal"));
@@ -241,11 +279,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteGoal = useCallback(
     (goalId: string) => {
-      setState((s) => ({
-        ...s,
-        goals: s.goals.filter((g) => g.id !== goalId),
-        milestones: s.milestones.filter((m) => m.goalId !== goalId),
-      }));
+      setState((s) => {
+        const habitCompletions = { ...s.habitCompletions };
+        delete habitCompletions[goalId];
+        return {
+          ...s,
+          goals: s.goals.filter((g) => g.id !== goalId),
+          milestones: s.milestones.filter((m) => m.goalId !== goalId),
+          habitCompletions,
+        };
+      });
       const sb = getSupabase();
       if (sb && user) {
         // milestones cascade in the database
@@ -304,6 +347,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         identity: title,
         why: "",
         structure,
+        days: null,
+        cue: "",
         createdAt: nowIso,
       };
       goals.push(goal);
@@ -374,6 +419,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             identity: g.identity,
             why: g.why,
             structure: g.structure,
+            days: g.days,
+            cue: g.cue,
             created_at: g.createdAt,
           }))
         )
@@ -459,6 +506,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!sb || !user) return "Sign in to publish to the library.";
       const goal = state.goals.find((g) => g.id === goalId);
       if (!goal) return "Goal not found.";
+      if (goal.structure === "habit")
+        return "Habit goals can't be published yet.";
       const nodes = state.milestones.filter((m) => m.goalId === goalId);
       if (nodes.length === 0) return "Add some milestones before publishing.";
 
@@ -500,6 +549,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         identity: title,
         why: "",
         structure,
+        days: structure === "habit" ? [0, 1, 2, 3, 4, 5, 6] : null,
+        cue: "",
         createdAt: nowIso,
       };
       const idMap = new Map(nodes.map((n) => [n.id, crypto.randomUUID()]));
@@ -526,6 +577,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             identity: goal.identity,
             why: goal.why,
             structure: goal.structure,
+            days: goal.days,
+            cue: goal.cue,
             created_at: goal.createdAt,
           })
           .then(({ error }) => {
@@ -552,6 +605,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { error: null, goalId: goal.id };
     },
     [user, state.pro, state.goals.length]
+  );
+
+  const toggleHabitToday = useCallback(
+    (goalId: string) => {
+      const key = todayKey();
+      const dates = state.habitCompletions[goalId] ?? [];
+      const added = !dates.includes(key);
+      setState((s) => {
+        const current = s.habitCompletions[goalId] ?? [];
+        const next = added
+          ? [...current, key]
+          : current.filter((d) => d !== key);
+        return {
+          ...s,
+          habitCompletions: { ...s.habitCompletions, [goalId]: next },
+        };
+      });
+      const sb = getSupabase();
+      if (sb && user) {
+        if (added) {
+          sb.from("habit_completions")
+            .upsert({ goal_id: goalId, user_id: user.id, date: key })
+            .then(logError("complete habit"));
+        } else {
+          sb.from("habit_completions")
+            .delete()
+            .eq("goal_id", goalId)
+            .eq("date", key)
+            .then(logError("uncomplete habit"));
+        }
+      }
+    },
+    [user, state.habitCompletions]
+  );
+
+  const updateHabitConfig = useCallback(
+    (goalId: string, days: number[], cue: string) => {
+      const sorted = [...days].sort();
+      setState((s) => ({
+        ...s,
+        goals: s.goals.map((g) =>
+          g.id === goalId ? { ...g, days: sorted, cue: cue.trim() } : g
+        ),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("goals")
+          .update({ days: sorted, cue: cue.trim() })
+          .eq("id", goalId)
+          .then(logError("update habit"));
+      }
+    },
+    [user]
   );
 
   const refreshPro = useCallback(async () => {
@@ -617,6 +723,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteGoal,
         addMilestone,
         addSampleGoals,
+        toggleHabitToday,
+        updateHabitConfig,
         toggleMilestone,
         deleteMilestone,
         publishGoal,

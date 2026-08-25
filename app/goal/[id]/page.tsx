@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { Goal, Milestone } from "@/lib/types";
+import { DAY_LABELS, isDueOn, todayKey } from "@/lib/dates";
+import { currentStreak, completionRate } from "@/lib/habits";
 
 function MilestoneInput({
   placeholder,
@@ -435,6 +437,113 @@ function GraphView({
   );
 }
 
+/* ---------- Habit: weekly schedule, streaks, and a stacking cue ---------- */
+
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
+function HabitView({ goal }: { goal: Goal }) {
+  const { state, toggleHabitToday, updateHabitConfig } = useApp();
+  const [cueDraft, setCueDraft] = useState(goal.cue);
+
+  const dates = state.habitCompletions[goal.id] ?? [];
+  const days = goal.days ?? ALL_DAYS;
+  const scheduledToday = isDueOn(days, new Date());
+  const doneToday = dates.includes(todayKey());
+  const streak = currentStreak(days, dates, goal.createdAt);
+  const rate = completionRate(days, dates, goal.createdAt);
+
+  const toggleDay = (d: number) => {
+    const next = days.includes(d) ? days.filter((x) => x !== d) : [...days, d];
+    if (next.length === 0) return; // a habit needs at least one scheduled day
+    updateHabitConfig(goal.id, next, goal.cue);
+  };
+
+  return (
+    <div className="mt-6 space-y-5">
+      <div className="rounded-xl border border-gray-700 bg-navy-900 p-6 text-center">
+        {scheduledToday ? (
+          <>
+            <button
+              onClick={() => toggleHabitToday(goal.id)}
+              aria-label={doneToday ? "Un-complete today" : "Complete today"}
+              className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full border-4 text-3xl font-bold transition ${
+                doneToday
+                  ? "border-gold-400 bg-gold-500 text-ongold"
+                  : "border-gray-100 bg-navy-950 text-gray-100 hover:border-gold-400"
+              }`}
+            >
+              {doneToday ? "✓" : "○"}
+            </button>
+            <p className="mt-3 font-medium">
+              {doneToday ? "Done today" : "Tap when it's done"}
+            </p>
+          </>
+        ) : (
+          <p className="text-gray-400">Rest day — nothing scheduled today.</p>
+        )}
+        <p className="mt-2 text-sm text-gray-400">
+          {streak > 0 ? `🔥 ${streak}-day streak` : "Start your streak today"}
+          {rate !== null && <> · {rate}% of scheduled days in the last month</>}
+        </p>
+      </div>
+
+      <form
+        className="rounded-xl border border-gray-700 bg-navy-900 p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          updateHabitConfig(goal.id, days, cueDraft.replace(/^after\s+/i, ""));
+        }}
+      >
+        <p className="text-sm font-medium">Stack it after a routine</p>
+        {goal.cue && (
+          <p className="mt-1 text-sm text-gold-300">
+            After {goal.cue}, I will {goal.identity}.
+          </p>
+        )}
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            value={cueDraft}
+            onChange={(e) => setCueDraft(e.target.value)}
+            placeholder="after I pour my morning coffee (optional)"
+            className="w-full flex-1 rounded-lg border border-gray-600 bg-navy-950 px-3 py-2 text-sm outline-none focus:border-gold-500"
+          />
+          {cueDraft.replace(/^after\s+/i, "").trim() !== goal.cue && (
+            <button
+              type="submit"
+              className="shrink-0 rounded-lg bg-gold-500 px-3 py-2 text-sm font-medium text-ongold hover:bg-gold-400"
+            >
+              Save
+            </button>
+          )}
+        </div>
+      </form>
+
+      <div className="rounded-xl border border-gray-700 bg-navy-900 p-4">
+        <p className="text-sm font-medium">Scheduled days</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {ALL_DAYS.map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => toggleDay(d)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                days.includes(d)
+                  ? "bg-gold-500 text-ongold"
+                  : "bg-navy-700 text-gray-300"
+              }`}
+            >
+              {DAY_LABELS[d]}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-gray-400">
+          Streaks count consecutive scheduled days — rest days never break them.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Page ---------- */
 
 export default function GoalTreePage() {
@@ -508,7 +617,7 @@ export default function GoalTreePage() {
         </div>
       )}
 
-      {milestones.length === 0 && (
+      {milestones.length === 0 && goal.structure !== "habit" && (
         <p className="mt-6 text-gray-300">
           {goal.structure === "linear" &&
             "Break this goal into milestones — the levels you'll climb on the way. Start with the first small win."}
@@ -519,7 +628,9 @@ export default function GoalTreePage() {
         </p>
       )}
 
-      {goal.structure === "linear" ? (
+      {goal.structure === "habit" ? (
+        <HabitView goal={goal} />
+      ) : goal.structure === "linear" ? (
         <LinearPath goal={goal} milestones={milestones} />
       ) : (
         <GraphView goal={goal} milestones={milestones} />
