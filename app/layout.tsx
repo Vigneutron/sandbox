@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Chakra_Petch } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import { AppProvider } from "@/lib/store";
 
-const geist = Geist({ subsets: ["latin"] });
+const chakra = Chakra_Petch({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
 export const metadata: Metadata = {
   title: "Goal Goal Gadget",
@@ -18,7 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geist.className} min-h-screen bg-navy-950 text-gray-100`}
+        className={`${chakra.className} min-h-screen bg-navy-950 text-gray-100`}
       >
         <AppProvider>
           <header className="border-b border-gray-700">
