@@ -29,10 +29,15 @@ export async function POST(req: NextRequest) {
 
   const stripe = new Stripe(stripeKey);
   const origin = req.headers.get("origin") ?? new URL(req.url).origin;
-  const session = await stripe.billingPortal.sessions.create({
-    customer: data.stripe_customer_id,
-    return_url: `${origin}/upgrade`,
-  });
-
-  return NextResponse.json({ url: session.url });
+  try {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: data.stripe_customer_id,
+      return_url: `${origin}/upgrade`,
+    });
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown Stripe error";
+    console.error("portal:", message);
+    return NextResponse.json({ error: `Stripe error: ${message}` }, { status: 500 });
+  }
 }

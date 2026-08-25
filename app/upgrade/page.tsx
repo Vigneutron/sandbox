@@ -18,14 +18,19 @@ async function callBilling(path: string): Promise<{ url?: string; error?: string
   const { data } = await sb.auth.getSession();
   const token = data.session?.access_token;
   if (!token) return { error: "Please sign in first." };
+  let res: Response;
   try {
-    const res = await fetch(path, {
+    res = await fetch(path, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
-    return await res.json();
   } catch {
     return { error: "Network error — please try again." };
+  }
+  try {
+    return await res.json();
+  } catch {
+    return { error: `Server error (HTTP ${res.status}) — the server sent an unreadable response.` };
   }
 }
 
