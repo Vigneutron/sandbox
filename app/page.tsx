@@ -64,7 +64,7 @@ export default function TodayPage() {
           return (
             <section key={goal.id}>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-                I am becoming {goal.identity}
+                {goal.identity}
               </h2>
               <ul className="mt-2 space-y-2">
                 {habits.map((habit) => {

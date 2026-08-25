@@ -27,7 +27,7 @@ function GoalForm() {
       <input
         value={identity}
         onChange={(e) => setIdentity(e.target.value)}
-        placeholder="a runner, a writer, someone who ships…"
+        placeholder="Become a millionaire"
         className="w-full flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
       />
       <button
@@ -181,9 +181,7 @@ export default function GoalsPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="font-semibold">
-                    I am becoming {goal.identity}
-                  </h2>
+                  <h2 className="font-semibold">{goal.identity}</h2>
                   {goal.why && (
                     <p className="text-sm text-zinc-500">{goal.why}</p>
                   )}
