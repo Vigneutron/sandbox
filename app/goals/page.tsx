@@ -24,15 +24,12 @@ function GoalForm() {
         setIdentity("");
       }}
     >
-      <label className="flex flex-1 items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 focus-within:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
-        <span className="shrink-0 text-sm text-zinc-500">I am becoming</span>
-        <input
-          value={identity}
-          onChange={(e) => setIdentity(e.target.value)}
-          placeholder="a runner…"
-          className="w-full bg-transparent outline-none"
-        />
-      </label>
+      <input
+        value={identity}
+        onChange={(e) => setIdentity(e.target.value)}
+        placeholder="a runner, a writer, someone who ships…"
+        className="w-full flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+      />
       <button
         type="submit"
         disabled={!identity.trim()}
@@ -68,34 +65,30 @@ function HabitForm({ goal, onDone }: { goal: Goal; onDone: () => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         if (!title.trim() || days.length === 0) return;
-        addHabit(goal.id, title, cue, days);
+        // cue is displayed as "After {cue}", so drop a typed leading "after"
+        addHabit(goal.id, title, cue.replace(/^after\s+/i, ""), days);
         onDone();
       }}
     >
-      <label className="block text-sm">
-        <span className="font-medium">I will…</span>
+      <div className="text-sm">
         <input
           autoFocus
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="put on my running shoes"
-          className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-600"
+          placeholder="put on my running shoes…"
+          className="w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-600"
         />
         <span className="mt-1 block text-xs text-zinc-500">
           Make it tiny — two minutes or less.
         </span>
-      </label>
+      </div>
       <div className="text-sm">
-        <label className="block">
-          <span className="font-medium">After…</span>{" "}
-          <span className="text-zinc-500">(optional cue)</span>
-          <input
-            value={cue}
-            onChange={(e) => setCue(e.target.value)}
-            placeholder="I pour my morning coffee"
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-600"
-          />
-        </label>
+        <input
+          value={cue}
+          onChange={(e) => setCue(e.target.value)}
+          placeholder="after I pour my morning coffee (optional)"
+          className="w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-600"
+        />
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {CUE_SUGGESTIONS.map((suggestion) => (
             <button
@@ -114,8 +107,7 @@ function HabitForm({ goal, onDone }: { goal: Goal; onDone: () => void }) {
         </div>
       </div>
       <div className="text-sm">
-        <span className="font-medium">On days</span>
-        <div className="mt-1 flex gap-1.5">
+        <div className="flex gap-1.5">
           {ALL_DAYS.map((d) => (
             <button
               key={d}
