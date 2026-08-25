@@ -439,7 +439,8 @@ function GraphView({
 
 export default function GoalTreePage() {
   const { id } = useParams<{ id: string }>();
-  const { state, ready } = useApp();
+  const { state, ready, user, publishGoal } = useApp();
+  const [publishState, setPublishState] = useState<string | null>(null);
 
   if (!ready) return null;
 
@@ -482,6 +483,28 @@ export default function GoalTreePage() {
           <span className="shrink-0 text-xs text-gray-400">
             {done}/{milestones.length}
           </span>
+        </div>
+      )}
+
+      {user && milestones.length > 0 && (
+        <div className="mt-2">
+          <button
+            disabled={publishState !== null}
+            onClick={async () => {
+              setPublishState("publishing");
+              const err = await publishGoal(goal.id);
+              setPublishState(err ?? "done");
+            }}
+            className="text-sm text-gray-400 underline hover:text-gray-200 disabled:no-underline"
+          >
+            {publishState === null && "Share this structure to the library"}
+            {publishState === "publishing" && "Publishing…"}
+            {publishState === "done" && "Published to the library ✓"}
+            {publishState !== null &&
+              publishState !== "publishing" &&
+              publishState !== "done" &&
+              `Couldn't publish: ${publishState}`}
+          </button>
         </div>
       )}
 

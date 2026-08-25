@@ -67,6 +67,14 @@ interface AppContextValue {
   addSampleGoals: () => void;
   toggleMilestone: (milestoneId: string) => void;
   deleteMilestone: (milestoneId: string) => void;
+  /** copies one of the user's goals into the public template library */
+  publishGoal: (goalId: string) => Promise<string | null>;
+  /** copies a library template into the user's goals; returns the new goal id */
+  importTemplate: (
+    title: string,
+    structure: GoalStructure,
+    nodes: { id: string; parentId: string | null; title: string; position: number }[]
+  ) => { error: string | null; goalId?: string };
   /** re-reads Pro status from the database (e.g. after Stripe checkout) */
   refreshPro: () => Promise<void>;
   signUp: (
@@ -445,6 +453,107 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const publishGoal = useCallback(
+    async (goalId: string): Promise<string | null> => {
+      const sb = getSupabase();
+      if (!sb || !user) return "Sign in to publish to the library.";
+      const goal = state.goals.find((g) => g.id === goalId);
+      if (!goal) return "Goal not found.";
+      const nodes = state.milestones.filter((m) => m.goalId === goalId);
+      if (nodes.length === 0) return "Add some milestones before publishing.";
+
+      const templateId = crypto.randomUUID();
+      const idMap = new Map(nodes.map((m) => [m.id, crypto.randomUUID()]));
+      const { error } = await sb.from("goal_templates").insert({
+        id: templateId,
+        author_id: user.id,
+        title: goal.identity,
+        structure: goal.structure,
+      });
+      if (error) return error.message;
+      const { error: msError } = await sb.from("template_milestones").insert(
+        nodes.map((m) => ({
+          id: idMap.get(m.id),
+          template_id: templateId,
+          parent_id: m.parentId ? (idMap.get(m.parentId) ?? null) : null,
+          title: m.title,
+          position: m.position,
+        }))
+      );
+      return msError ? msError.message : null;
+    },
+    [user, state.goals, state.milestones]
+  );
+
+  const importTemplate = useCallback(
+    (
+      title: string,
+      structure: GoalStructure,
+      nodes: { id: string; parentId: string | null; title: string; position: number }[]
+    ): { error: string | null; goalId?: string } => {
+      if (!(state.pro || state.goals.length < FREE_GOAL_LIMIT)) {
+        return { error: "Free plan is full — go Pro for unlimited goals." };
+      }
+      const nowIso = new Date().toISOString();
+      const goal: Goal = {
+        id: crypto.randomUUID(),
+        identity: title,
+        why: "",
+        structure,
+        createdAt: nowIso,
+      };
+      const idMap = new Map(nodes.map((n) => [n.id, crypto.randomUUID()]));
+      const milestones: Milestone[] = nodes.map((n) => ({
+        id: idMap.get(n.id)!,
+        goalId: goal.id,
+        parentId: n.parentId ? (idMap.get(n.parentId) ?? null) : null,
+        title: n.title,
+        position: n.position,
+        completedAt: null,
+        createdAt: nowIso,
+      }));
+      setState((s) => ({
+        ...s,
+        goals: [...s.goals, goal],
+        milestones: [...s.milestones, ...milestones],
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("goals")
+          .insert({
+            id: goal.id,
+            user_id: user.id,
+            identity: goal.identity,
+            why: goal.why,
+            structure: goal.structure,
+            created_at: goal.createdAt,
+          })
+          .then(({ error }) => {
+            if (error) {
+              console.error("supabase import goal:", error.message);
+              return;
+            }
+            sb.from("milestones")
+              .insert(
+                milestones.map((m) => ({
+                  id: m.id,
+                  user_id: user.id,
+                  goal_id: m.goalId,
+                  parent_id: m.parentId,
+                  title: m.title,
+                  position: m.position,
+                  completed_at: null,
+                  created_at: m.createdAt,
+                }))
+              )
+              .then(logError("import milestones"));
+          });
+      }
+      return { error: null, goalId: goal.id };
+    },
+    [user, state.pro, state.goals.length]
+  );
+
   const refreshPro = useCallback(async () => {
     const sb = getSupabase();
     if (!sb || !user) return;
@@ -510,6 +619,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addSampleGoals,
         toggleMilestone,
         deleteMilestone,
+        publishGoal,
+        importTemplate,
         refreshPro,
         signUp,
         resendConfirmation,
