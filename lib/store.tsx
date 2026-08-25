@@ -9,7 +9,13 @@ import {
   useCallback,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { AppState, Goal, Milestone, FREE_GOAL_LIMIT } from "./types";
+import {
+  AppState,
+  Goal,
+  GoalStructure,
+  Milestone,
+  FREE_GOAL_LIMIT,
+} from "./types";
 import { getSupabase } from "./supabase";
 
 const STORAGE_KEY = "goal-goal-gadget-v1";
@@ -22,8 +28,15 @@ function loadLocal(): AppState {
     if (!raw) return EMPTY;
     const parsed = JSON.parse(raw) as Partial<AppState>;
     return {
-      goals: parsed.goals ?? [],
-      milestones: parsed.milestones ?? [],
+      // defaults cover data saved before structures/nesting existed
+      goals: (parsed.goals ?? []).map((g) => ({
+        ...g,
+        structure: g.structure ?? "linear",
+      })),
+      milestones: (parsed.milestones ?? []).map((m) => ({
+        ...m,
+        parentId: m.parentId ?? null,
+      })),
       pro: parsed.pro ?? false,
     };
   } catch {
@@ -47,9 +60,9 @@ interface AppContextValue {
   /** true when Supabase env vars are configured */
   cloudEnabled: boolean;
   user: User | null;
-  addGoal: (title: string) => string;
+  addGoal: (title: string, structure: GoalStructure) => string;
   deleteGoal: (goalId: string) => void;
-  addMilestone: (goalId: string, title: string) => void;
+  addMilestone: (goalId: string, title: string, parentId?: string | null) => void;
   toggleMilestone: (milestoneId: string) => void;
   deleteMilestone: (milestoneId: string) => void;
   /** re-reads Pro status from the database (e.g. after Stripe checkout) */
@@ -121,6 +134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               user_id: user.id,
               identity: goal.identity,
               why: goal.why,
+              structure: goal.structure,
               created_at: goal.createdAt,
             }))
           )
@@ -133,6 +147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 id: ms.id,
                 user_id: user.id,
                 goal_id: ms.goalId,
+                parent_id: ms.parentId,
                 title: ms.title,
                 position: ms.position,
                 completed_at: ms.completedAt,
@@ -151,11 +166,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             id: r.id,
             identity: r.identity,
             why: r.why ?? "",
+            structure: r.structure ?? "linear",
             createdAt: r.created_at,
           })),
           milestones: m.data.map((r) => ({
             id: r.id,
             goalId: r.goal_id,
+            parentId: r.parent_id ?? null,
             title: r.title,
             position: r.position,
             completedAt: r.completed_at,
@@ -181,11 +198,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state, ready]);
 
   const addGoal = useCallback(
-    (title: string) => {
+    (title: string, structure: GoalStructure) => {
       const goal: Goal = {
         id: crypto.randomUUID(),
         identity: title.trim(),
         why: "",
+        structure,
         createdAt: new Date().toISOString(),
       };
       setState((s) => ({ ...s, goals: [...s.goals, goal] }));
@@ -197,6 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             user_id: user.id,
             identity: goal.identity,
             why: goal.why,
+            structure: goal.structure,
             created_at: goal.createdAt,
           })
           .then(logError("add goal"));
@@ -223,17 +242,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const addMilestone = useCallback(
-    (goalId: string, title: string) => {
+    (goalId: string, title: string, parentId: string | null = null) => {
       const position =
         Math.max(
           0,
           ...state.milestones
-            .filter((m) => m.goalId === goalId)
+            .filter((m) => m.goalId === goalId && m.parentId === parentId)
             .map((m) => m.position)
         ) + 1;
       const milestone: Milestone = {
         id: crypto.randomUUID(),
         goalId,
+        parentId,
         title: title.trim(),
         position,
         completedAt: null,
@@ -247,6 +267,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             id: milestone.id,
             user_id: user.id,
             goal_id: milestone.goalId,
+            parent_id: milestone.parentId,
             title: milestone.title,
             position: milestone.position,
             completed_at: null,
@@ -282,10 +303,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteMilestone = useCallback(
     (milestoneId: string) => {
-      setState((s) => ({
-        ...s,
-        milestones: s.milestones.filter((m) => m.id !== milestoneId),
-      }));
+      setState((s) => {
+        // remove the node and all descendants (the database cascades via parent_id)
+        const doomed = new Set([milestoneId]);
+        let grew = true;
+        while (grew) {
+          grew = false;
+          for (const m of s.milestones) {
+            if (m.parentId && doomed.has(m.parentId) && !doomed.has(m.id)) {
+              doomed.add(m.id);
+              grew = true;
+            }
+          }
+        }
+        return {
+          ...s,
+          milestones: s.milestones.filter((m) => !doomed.has(m.id)),
+        };
+      });
       const sb = getSupabase();
       if (sb && user) {
         sb.from("milestones")
