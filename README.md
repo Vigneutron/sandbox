@@ -29,12 +29,28 @@ pending Stripe integration.
 Without those env vars the app runs in local-only mode and the Account page
 says accounts are coming soon.
 
+### Stripe setup
+
+1. Run `supabase/stripe-migration.sql` in the Supabase SQL Editor
+2. In the Stripe dashboard, create a product "Goal Goal Gadget Pro" with a
+   recurring $3/month price; copy the price ID
+3. Add a webhook endpoint pointing at
+   `https://<your-domain>/api/stripe-webhook` listening for
+   `checkout.session.completed` and `customer.subscription.deleted`;
+   copy its signing secret
+4. Set the four server env vars listed in `.env.example` (plus the
+   Supabase service-role key) in Vercel and redeploy
+
+Pro status is granted and revoked only by the Stripe webhook using the
+service-role key; browsers can read but never write their own `pro` flag.
+Use Stripe test mode (card 4242 4242 4242 4242) end-to-end before switching
+to live keys.
+
 ### Roadmap
 
-1. Stripe subscription checkout for Pro (move the `pro` flag server-side)
-2. Progress visualizations (habit history heatmap)
-3. Email/push reminders (Pro)
-4. Landing page polish
+1. Progress visualizations (habit history heatmap)
+2. Email/push reminders (Pro)
+3. Landing page polish
 
 ## Development
 

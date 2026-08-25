@@ -54,7 +54,8 @@ interface AppContextValue {
   addHabit: (goalId: string, title: string, cue: string, days: number[]) => void;
   deleteHabit: (habitId: string) => void;
   toggleToday: (habitId: string) => void;
-  upgrade: () => void;
+  /** re-reads Pro status from the database (e.g. after Stripe checkout) */
+  refreshPro: () => Promise<void>;
   signUp: (email: string, password: string) => Promise<string | null>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
@@ -160,13 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             .insert(rows)
             .then(logError("migrate completions"));
         }
-        if (local.pro) {
-          await sb
-            .from("profiles")
-            .upsert({ user_id: user.id, pro: true })
-            .then(logError("migrate profile"));
-        }
-        if (!cancelled) setState(local);
+        if (!cancelled) setState({ ...local, pro: p.data?.pro ?? false });
         return;
       }
 
@@ -339,14 +334,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
-  const upgrade = useCallback(() => {
-    setState((s) => ({ ...s, pro: true }));
+  const refreshPro = useCallback(async () => {
     const sb = getSupabase();
-    if (sb && user) {
-      sb.from("profiles")
-        .upsert({ user_id: user.id, pro: true })
-        .then(logError("upgrade"));
-    }
+    if (!sb || !user) return;
+    const { data } = await sb.from("profiles").select("pro").maybeSingle();
+    if (data) setState((s) => ({ ...s, pro: data.pro }));
   }, [user]);
 
   const signUp = useCallback(async (email: string, password: string) => {
@@ -389,7 +381,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addHabit,
         deleteHabit,
         toggleToday,
-        upgrade,
+        refreshPro,
         signUp,
         signIn,
         signOut,
