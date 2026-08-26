@@ -15,6 +15,7 @@ import {
   GoalStructure,
   MachineEdge,
   Milestone,
+  TemplateBundle,
   FREE_GOAL_LIMIT,
 } from "./types";
 import { getSupabase } from "./supabase";
@@ -107,12 +108,12 @@ interface AppContextValue {
   deleteMilestone: (milestoneId: string) => void;
   /** copies one of the user's goals into the public template library */
   publishGoal: (goalId: string) => Promise<string | null>;
-  /** copies a library template into the user's goals; returns the new goal id */
-  importTemplate: (
-    title: string,
-    structure: GoalStructure,
-    nodes: { id: string; parentId: string | null; title: string; position: number }[]
-  ) => { error: string | null; goalId?: string };
+  /** rename a goal */
+  updateGoalTitle: (goalId: string, title: string) => void;
+  /** rename a milestone/step */
+  updateMilestoneTitle: (milestoneId: string, title: string) => void;
+  /** creates every goal in a template bundle; returns the first new goal id */
+  importBundle: (bundle: TemplateBundle) => { error: string | null; goalId?: string };
   /** re-reads Pro status from the database (e.g. after Stripe checkout) */
   refreshPro: () => Promise<void>;
   signUp: (
@@ -813,92 +814,187 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!sb || !user) return "Sign in to publish to the library.";
       const goal = state.goals.find((g) => g.id === goalId);
       if (!goal) return "Goal not found.";
-      if (goal.structure === "habit" || goal.structure === "machine")
-        return "This goal type can't be published yet.";
       const nodes = state.milestones.filter((m) => m.goalId === goalId);
-      if (nodes.length === 0) return "Add some milestones before publishing.";
+      if (nodes.length === 0 && goal.structure !== "habit")
+        return "Add some milestones before publishing.";
 
-      const templateId = crypto.randomUUID();
-      const idMap = new Map(nodes.map((m) => [m.id, crypto.randomUUID()]));
+      const body: TemplateBundle = {
+        goals: [
+          {
+            key: "g1",
+            title: goal.identity,
+            structure: goal.structure,
+            days: goal.days,
+            cue: goal.cue,
+            nodes: nodes.map((m) => ({
+              key: m.id,
+              parent: m.parentId,
+              title: m.title,
+              x: m.x,
+              y: m.y,
+              loop: m.loopTarget,
+            })),
+            edges: state.edges
+              .filter((e) => e.goalId === goalId)
+              .map((e) => [e.fromId, e.toId] as [string, string]),
+          },
+        ],
+      };
       const { error } = await sb.from("goal_templates").insert({
-        id: templateId,
+        id: crypto.randomUUID(),
         author_id: user.id,
         title: goal.identity,
         structure: goal.structure,
+        body,
       });
-      if (error) return error.message;
-      const { error: msError } = await sb.from("template_milestones").insert(
-        nodes.map((m) => ({
-          id: idMap.get(m.id),
-          template_id: templateId,
-          parent_id: m.parentId ? (idMap.get(m.parentId) ?? null) : null,
-          title: m.title,
-          position: m.position,
-        }))
-      );
-      return msError ? msError.message : null;
+      return error ? error.message : null;
     },
-    [user, state.goals, state.milestones]
+    [user, state.goals, state.milestones, state.edges]
   );
 
-  const importTemplate = useCallback(
-    (
-      title: string,
-      structure: GoalStructure,
-      nodes: { id: string; parentId: string | null; title: string; position: number }[]
-    ): { error: string | null; goalId?: string } => {
-      if (!(state.pro || state.goals.length < FREE_GOAL_LIMIT)) {
-        return { error: "Free plan is full — go Pro for unlimited goals." };
-      }
-      const nowIso = new Date().toISOString();
-      const goal: Goal = {
-        id: crypto.randomUUID(),
-        identity: title,
-        why: "",
-        structure,
-        days: structure === "habit" ? [0, 1, 2, 3, 4, 5, 6] : null,
-        cue: "",
-        deadline: null,
-        createdAt: nowIso,
-      };
-      const idMap = new Map(nodes.map((n) => [n.id, crypto.randomUUID()]));
-      const milestones: Milestone[] = nodes.map((n) => ({
-        id: idMap.get(n.id)!,
-        goalId: goal.id,
-        parentId: n.parentId ? (idMap.get(n.parentId) ?? null) : null,
-        title: n.title,
-        position: n.position,
-        x: null,
-        y: null,
-        loopTarget: null,
-        loopCount: 0,
-        loopLast: null,
-        hookSourceId: null,
-        completedAt: null,
-        createdAt: nowIso,
-      }));
+  const updateGoalTitle = useCallback(
+    (goalId: string, title: string) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
       setState((s) => ({
         ...s,
-        goals: [...s.goals, goal],
-        milestones: [...s.milestones, ...milestones],
+        goals: s.goals.map((g) =>
+          g.id === goalId ? { ...g, identity: trimmed } : g
+        ),
       }));
       const sb = getSupabase();
       if (sb && user) {
         sb.from("goals")
-          .insert({
-            id: goal.id,
-            user_id: user.id,
-            identity: goal.identity,
-            why: goal.why,
-            structure: goal.structure,
-            days: goal.days,
-            cue: goal.cue,
-            deadline: goal.deadline,
-            created_at: goal.createdAt,
-          })
+          .update({ identity: trimmed })
+          .eq("id", goalId)
+          .then(logError("rename goal"));
+      }
+    },
+    [user]
+  );
+
+  const updateMilestoneTitle = useCallback(
+    (milestoneId: string, title: string) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+      setState((s) => ({
+        ...s,
+        milestones: s.milestones.map((m) =>
+          m.id === milestoneId ? { ...m, title: trimmed } : m
+        ),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("milestones")
+          .update({ title: trimmed })
+          .eq("id", milestoneId)
+          .then(logError("rename milestone"));
+      }
+    },
+    [user]
+  );
+
+  const importBundle = useCallback(
+    (bundle: TemplateBundle): { error: string | null; goalId?: string } => {
+      const count = bundle.goals.length;
+      if (!state.pro && state.goals.length + count > FREE_GOAL_LIMIT) {
+        return {
+          error: `This template creates ${count} goal${count > 1 ? "s" : ""} and the free plan holds ${FREE_GOAL_LIMIT} — go Pro for unlimited goals.`,
+        };
+      }
+      const nowIso = new Date().toISOString();
+      const goals: Goal[] = [];
+      const milestones: Milestone[] = [];
+      const edges: MachineEdge[] = [];
+      const nodeId = new Map<string, string>();
+
+      for (const part of bundle.goals) {
+        const goal: Goal = {
+          id: crypto.randomUUID(),
+          identity: part.title,
+          why: "",
+          structure: part.structure,
+          days:
+            part.structure === "habit"
+              ? (part.days ?? [0, 1, 2, 3, 4, 5, 6])
+              : null,
+          cue: part.cue ?? "",
+          deadline: null,
+          createdAt: nowIso,
+        };
+        goals.push(goal);
+        (part.nodes ?? []).forEach((n, idx) => {
+          const mid = crypto.randomUUID();
+          nodeId.set(`${part.key}.${n.key}`, mid);
+          milestones.push({
+            id: mid,
+            goalId: goal.id,
+            parentId: null,
+            title: n.title,
+            position: idx + 1,
+            x: n.x ?? null,
+            y: n.y ?? null,
+            loopTarget: n.loop ?? null,
+            loopCount: 0,
+            loopLast: null,
+            hookSourceId: null,
+            completedAt: null,
+            createdAt: nowIso,
+          });
+        });
+      }
+      bundle.goals.forEach((part, gi) => {
+        (part.nodes ?? []).forEach((n) => {
+          const m = milestones.find(
+            (mm) => mm.id === nodeId.get(`${part.key}.${n.key}`)
+          )!;
+          if (n.parent)
+            m.parentId = nodeId.get(`${part.key}.${n.parent}`) ?? null;
+          if (n.hook) {
+            const ref = n.hook.includes(".") ? n.hook : `${part.key}.${n.hook}`;
+            m.hookSourceId = nodeId.get(ref) ?? null;
+          }
+        });
+        (part.edges ?? []).forEach(([from, to]) => {
+          const fromId = nodeId.get(`${part.key}.${from}`);
+          const toId = nodeId.get(`${part.key}.${to}`);
+          if (fromId && toId) {
+            edges.push({
+              id: crypto.randomUUID(),
+              goalId: goals[gi].id,
+              fromId,
+              toId,
+            });
+          }
+        });
+      });
+
+      setState((s) => ({
+        ...s,
+        goals: [...s.goals, ...goals],
+        milestones: [...s.milestones, ...milestones],
+        edges: [...s.edges, ...edges],
+      }));
+
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("goals")
+          .insert(
+            goals.map((g) => ({
+              id: g.id,
+              user_id: user.id,
+              identity: g.identity,
+              why: g.why,
+              structure: g.structure,
+              days: g.days,
+              cue: g.cue,
+              deadline: g.deadline,
+              created_at: g.createdAt,
+            }))
+          )
           .then(({ error }) => {
             if (error) {
-              console.error("supabase import goal:", error.message);
+              console.error("supabase import goals:", error.message);
               return;
             }
             sb.from("milestones")
@@ -910,14 +1006,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   parent_id: m.parentId,
                   title: m.title,
                   position: m.position,
+                  pos_x: m.x,
+                  pos_y: m.y,
+                  loop_target: m.loopTarget,
+                  hook_source_id: m.hookSourceId,
                   completed_at: null,
                   created_at: m.createdAt,
                 }))
               )
-              .then(logError("import milestones"));
+              .then(({ error: msError }) => {
+                if (msError) {
+                  console.error("supabase import milestones:", msError.message);
+                  return;
+                }
+                if (edges.length > 0) {
+                  sb.from("machine_edges")
+                    .insert(
+                      edges.map((edge) => ({
+                        id: edge.id,
+                        user_id: user.id,
+                        goal_id: edge.goalId,
+                        from_id: edge.fromId,
+                        to_id: edge.toId,
+                      }))
+                    )
+                    .then(logError("import edges"));
+                }
+              });
           });
       }
-      return { error: null, goalId: goal.id };
+      return { error: null, goalId: goals[0]?.id };
     },
     [user, state.pro, state.goals.length]
   );
@@ -1068,7 +1186,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleMilestone,
         deleteMilestone,
         publishGoal,
-        importTemplate,
+        updateGoalTitle,
+        updateMilestoneTitle,
+        importBundle,
         refreshPro,
         signUp,
         resendConfirmation,

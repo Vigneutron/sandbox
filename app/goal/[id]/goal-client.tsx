@@ -53,7 +53,8 @@ function LinearPath({
   goal: Goal;
   milestones: Milestone[];
 }) {
-  const { addMilestone, toggleMilestone, deleteMilestone } = useApp();
+  const { addMilestone, toggleMilestone, deleteMilestone, updateMilestoneTitle } =
+    useApp();
   const currentId = milestones.find((m) => !m.completedAt)?.id;
   // summit first: the latest milestone renders at the top, the start at the bottom
   const climb = [...milestones].reverse();
@@ -118,7 +119,20 @@ function LinearPath({
                   )}
                 </div>
                 <button
-                  onClick={() => deleteMilestone(milestone.id)}
+                  onClick={() => {
+                    const next = prompt("Rename milestone:", milestone.title);
+                    if (next) updateMilestoneTitle(milestone.id, next);
+                  }}
+                  aria-label={`Rename ${milestone.title}`}
+                  className="shrink-0 p-1 text-gray-500 hover:text-gray-200"
+                >
+                  ✎
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm(`Delete "${milestone.title}"?`))
+                      deleteMilestone(milestone.id);
+                  }}
                   aria-label={`Delete ${milestone.title}`}
                   className="shrink-0 p-1 text-gray-500 hover:text-red-600"
                 >
@@ -172,7 +186,8 @@ function GraphView({
   goal: Goal;
   milestones: Milestone[];
 }) {
-  const { addMilestone, toggleMilestone, deleteMilestone } = useApp();
+  const { addMilestone, toggleMilestone, deleteMilestone, updateMilestoneTitle } =
+    useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [branching, setBranching] = useState(false);
   const isPyramid = goal.structure === "pyramid";
@@ -384,11 +399,21 @@ function GraphView({
             </button>
             <button
               onClick={() => {
+                const next = prompt("Rename:", selected.title);
+                if (next) updateMilestoneTitle(selected.id, next);
+              }}
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm hover:bg-navy-800"
+            >
+              ✎ Rename
+            </button>
+            <button
+              onClick={() => {
                 const kids = childrenOf(selected.id).length;
-                if (
-                  kids === 0 ||
-                  confirm(`Delete "${selected.title}" and everything under it?`)
-                ) {
+                const warning =
+                  kids > 0
+                    ? `Delete "${selected.title}" and everything under it?`
+                    : `Delete "${selected.title}"?`;
+                if (confirm(warning)) {
                   deleteMilestone(selected.id);
                   select(null);
                 }
@@ -642,6 +667,7 @@ function MachineView({ goal }: { goal: Goal }) {
     tapLoop,
     toggleMilestone,
     deleteMilestone,
+    updateMilestoneTitle,
   } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -1005,8 +1031,19 @@ function MachineView({ goal }: { goal: Goal }) {
             )}
             <button
               onClick={() => {
-                deleteMilestone(selected.id);
-                setSelectedId(null);
+                const next = prompt("Rename step:", selected.title);
+                if (next) updateMilestoneTitle(selected.id, next);
+              }}
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm hover:bg-navy-800"
+            >
+              ✎ Rename
+            </button>
+            <button
+              onClick={() => {
+                if (confirm(`Delete step "${selected.title}"?`)) {
+                  deleteMilestone(selected.id);
+                  setSelectedId(null);
+                }
               }}
               className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm text-gray-400 hover:text-red-500"
             >
@@ -1033,7 +1070,8 @@ function MachineView({ goal }: { goal: Goal }) {
 
 export default function GoalClient() {
   const { id } = useParams<{ id: string }>();
-  const { state, ready, user, publishGoal, updateGoalDeadline } = useApp();
+  const { state, ready, user, publishGoal, updateGoalDeadline, updateGoalTitle } =
+    useApp();
   const [publishState, setPublishState] = useState<string | null>(null);
 
   if (!ready) return null;
@@ -1061,7 +1099,19 @@ export default function GoalClient() {
         ← Goals
       </Link>
       <div className="mt-1 flex items-baseline justify-between gap-3">
-        <h1 className="text-2xl font-bold">{goal.identity}</h1>
+        <h1 className="text-2xl font-bold">
+          {goal.identity}{" "}
+          <button
+            onClick={() => {
+              const next = prompt("Rename goal:", goal.identity);
+              if (next) updateGoalTitle(goal.id, next);
+            }}
+            aria-label="Rename goal"
+            className="align-middle text-base text-gray-500 hover:text-gray-200"
+          >
+            ✎
+          </button>
+        </h1>
         <span className="shrink-0 text-xs uppercase tracking-wide text-gray-500">
           {goal.structure}
         </span>
@@ -1103,7 +1153,7 @@ export default function GoalClient() {
         </div>
       )}
 
-      {user && milestones.length > 0 && (
+      {user && (milestones.length > 0 || goal.structure === "habit") && (
         <div className="mt-2">
           <button
             disabled={publishState !== null}
