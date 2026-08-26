@@ -673,7 +673,14 @@ function MachineView({ goal }: { goal: Goal }) {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
   const [localPos, setLocalPos] = useState<Record<string, { x: number; y: number }>>({});
-  const drag = useRef<{ id: string; dx: number; dy: number; moved: boolean } | null>(null);
+  const drag = useRef<{
+    id: string;
+    dx: number;
+    dy: number;
+    moved: boolean;
+    lastX: number;
+    lastY: number;
+  } | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const nodes = state.milestones.filter((m) => m.goalId === goal.id);
@@ -705,23 +712,40 @@ function MachineView({ goal }: { goal: Goal }) {
   const onNodePointerDown = (m: Milestone) => (e: React.PointerEvent) => {
     const p = svgPoint(e);
     const pos = positions.get(m.id)!;
-    drag.current = { id: m.id, dx: p.x - pos.x, dy: p.y - pos.y, moved: false };
+    drag.current = {
+      id: m.id,
+      dx: p.x - pos.x,
+      dy: p.y - pos.y,
+      moved: false,
+      lastX: pos.x,
+      lastY: pos.y,
+    };
+    // keep receiving moves even if the finger leaves the svg
+    try {
+      svgRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      // some browsers refuse capture on svg roots; drag still works without it
+    }
   };
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!drag.current) return;
+    const d = drag.current;
+    if (!d) return;
+    e.preventDefault();
     const p = svgPoint(e);
-    const x = Math.min(Math.max(p.x - drag.current.dx, M_W / 2), CANVAS_W - M_W / 2);
-    const y = Math.min(Math.max(p.y - drag.current.dy, M_H / 2), CANVAS_H - M_H / 2);
-    drag.current.moved = true;
-    setLocalPos((lp) => ({ ...lp, [drag.current!.id]: { x, y } }));
+    const x = Math.min(Math.max(p.x - d.dx, M_W / 2), CANVAS_W - M_W / 2);
+    const y = Math.min(Math.max(p.y - d.dy, M_H / 2), CANVAS_H - M_H / 2);
+    d.moved = true;
+    d.lastX = x;
+    d.lastY = y;
+    const id = d.id; // captured: d may be cleared before the updater runs
+    setLocalPos((lp) => ({ ...lp, [id]: { x, y } }));
   };
   const onPointerUp = () => {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
     if (d.moved) {
-      const pos = localPos[d.id];
-      if (pos) moveNode(d.id, pos.x, pos.y);
+      moveNode(d.id, d.lastX, d.lastY);
       return;
     }
     // a tap, not a drag
@@ -732,6 +756,13 @@ function MachineView({ goal }: { goal: Goal }) {
     }
     setSelectedEdgeId(null);
     setSelectedId(selectedId === d.id ? null : d.id);
+  };
+  // the browser can seize the gesture (e.g. to scroll) mid-drag; commit
+  // whatever position we reached instead of crashing or losing the node
+  const onPointerCancel = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (d?.moved) moveNode(d.id, d.lastX, d.lastY);
   };
 
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null;
@@ -784,6 +815,7 @@ function MachineView({ goal }: { goal: Goal }) {
           className="block"
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
         >
           <defs>
             <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
