@@ -54,6 +54,8 @@ function loadLocal(): AppState {
         loopCount: m.loopCount ?? 0,
         loopLast: m.loopLast ?? null,
         hookSourceId: m.hookSourceId ?? null,
+        hookGoalId: m.hookGoalId ?? null,
+        hookTarget: m.hookTarget ?? null,
       })),
       edges: parsed.edges ?? [],
       habitCompletions: parsed.habitCompletions ?? {},
@@ -104,6 +106,12 @@ interface AppContextValue {
   tapLoop: (milestoneId: string) => void;
   /** Pro hooks: auto-complete this step when another one completes */
   setHook: (milestoneId: string, sourceId: string | null) => void;
+  /** Pro hooks: auto-complete this step once a habit goal hits `target` completions */
+  setHabitHook: (
+    milestoneId: string,
+    goalId: string | null,
+    target: number | null
+  ) => void;
   toggleMilestone: (milestoneId: string) => void;
   deleteMilestone: (milestoneId: string) => void;
   /** copies one of the user's goals into the public template library */
@@ -214,6 +222,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 loop_count: ms.loopCount,
                 loop_last: ms.loopLast,
                 hook_source_id: ms.hookSourceId,
+                hook_goal_id: ms.hookGoalId,
+                hook_target: ms.hookTarget,
                 completed_at: ms.completedAt,
                 created_at: ms.createdAt,
               }))
@@ -272,6 +282,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             loopCount: r.loop_count ?? 0,
             loopLast: r.loop_last ?? null,
             hookSourceId: r.hook_source_id ?? null,
+            hookGoalId: r.hook_goal_id ?? null,
+            hookTarget: r.hook_target ?? null,
             completedAt: r.completed_at,
             createdAt: r.created_at,
           })),
@@ -388,6 +400,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loopCount: 0,
         loopLast: null,
         hookSourceId: null,
+        hookGoalId: null,
+        hookTarget: null,
         completedAt: null,
         createdAt: new Date().toISOString(),
       };
@@ -449,6 +463,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loopCount: 0,
         loopLast: null,
         hookSourceId: null,
+        hookGoalId: null,
+        hookTarget: null,
         completedAt: done ? nowIso : null,
         createdAt: nowIso,
       };
@@ -610,6 +626,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loopCount: 0,
         loopLast: null,
         hookSourceId: null,
+        hookGoalId: null,
+        hookTarget: null,
         completedAt: null,
         createdAt: new Date().toISOString(),
       };
@@ -754,15 +772,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setState((s) => ({
         ...s,
         milestones: s.milestones.map((m) =>
-          m.id === milestoneId ? { ...m, hookSourceId: sourceId } : m
+          m.id === milestoneId
+            ? { ...m, hookSourceId: sourceId, hookGoalId: null, hookTarget: null }
+            : m
         ),
       }));
       const sb = getSupabase();
       if (sb && user) {
         sb.from("milestones")
-          .update({ hook_source_id: sourceId })
+          .update({
+            hook_source_id: sourceId,
+            hook_goal_id: null,
+            hook_target: null,
+          })
           .eq("id", milestoneId)
           .then(logError("set hook"));
+      }
+    },
+    [user]
+  );
+
+  const setHabitHook = useCallback(
+    (milestoneId: string, goalId: string | null, target: number | null) => {
+      const reps = goalId ? Math.max(1, target ?? 1) : null;
+      setState((s) => ({
+        ...s,
+        milestones: s.milestones.map((m) =>
+          m.id === milestoneId
+            ? { ...m, hookGoalId: goalId, hookTarget: reps, hookSourceId: null }
+            : m
+        ),
+      }));
+      const sb = getSupabase();
+      if (sb && user) {
+        sb.from("milestones")
+          .update({
+            hook_goal_id: goalId,
+            hook_target: reps,
+            hook_source_id: null,
+          })
+          .eq("id", milestoneId)
+          .then(logError("set habit hook"));
       }
     },
     [user]
@@ -938,6 +988,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             loopCount: 0,
             loopLast: null,
             hookSourceId: null,
+            hookGoalId: null,
+            hookTarget: null,
             completedAt: null,
             createdAt: nowIso,
           });
@@ -1010,6 +1062,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   pos_y: m.y,
                   loop_target: m.loopTarget,
                   hook_source_id: m.hookSourceId,
+                  hook_goal_id: m.hookGoalId,
+                  hook_target: m.hookTarget,
                   completed_at: null,
                   created_at: m.createdAt,
                 }))
@@ -1069,8 +1123,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
             .then(logError("uncomplete habit"));
         }
       }
+
+      // a habit hook fires once the habit has been done enough times
+      if (added) {
+        const total = dates.length + 1;
+        for (const m of state.milestones) {
+          if (
+            m.hookGoalId === goalId &&
+            !m.completedAt &&
+            total >= (m.hookTarget ?? 1)
+          ) {
+            completeCascade(m.id);
+          }
+        }
+      }
     },
-    [user, state.habitCompletions]
+    [user, state.habitCompletions, state.milestones, completeCascade]
   );
 
   const updateHabitConfig = useCallback(
@@ -1183,6 +1251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLoop,
         tapLoop,
         setHook,
+        setHabitHook,
         toggleMilestone,
         deleteMilestone,
         publishGoal,

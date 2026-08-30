@@ -579,8 +579,9 @@ const CANVAS_W = 1000;
 const CANVAS_H = 760;
 
 function HookEditor({ milestone }: { milestone: Milestone }) {
-  const { state, setHook } = useApp();
+  const { state, setHook, setHabitHook } = useApp();
   const [goalId, setGoalId] = useState("");
+  const [reps, setReps] = useState(30);
 
   if (!state.pro) {
     return (
@@ -598,27 +599,48 @@ function HookEditor({ milestone }: { milestone: Milestone }) {
   const sourceGoal = source
     ? state.goals.find((g) => g.id === source.goalId)
     : null;
-  const otherGoals = state.goals.filter(
-    (g) => g.id !== milestone.goalId && g.structure !== "habit"
-  );
+  const habitGoal = milestone.hookGoalId
+    ? state.goals.find((g) => g.id === milestone.hookGoalId)
+    : null;
+  const habitDone = habitGoal
+    ? (state.habitCompletions[habitGoal.id] ?? []).length
+    : 0;
+
+  // habits hook by repetitions; every other goal hooks step-to-step
+  const otherGoals = state.goals.filter((g) => g.id !== milestone.goalId);
+  const picked = goalId ? state.goals.find((g) => g.id === goalId) : null;
+  const pickedSteps = picked
+    ? state.milestones.filter((m) => m.goalId === picked.id && m.id !== milestone.id)
+    : [];
+
+  const clear = () => {
+    setHook(milestone.id, null);
+    setHabitHook(milestone.id, null, null);
+    setGoalId("");
+  };
 
   return (
     <div className="mt-3 border-t border-gray-700 pt-3 text-sm">
       <p className="font-medium">⚡ Hook</p>
-      {source ? (
+      {habitGoal ? (
+        <p className="mt-1 text-gray-400">
+          Auto-completes at {milestone.hookTarget} completions of the habit “
+          {habitGoal.identity}” — {habitDone} done so far.{" "}
+          <button onClick={clear} className="underline hover:text-gray-200">
+            Remove
+          </button>
+        </p>
+      ) : source ? (
         <p className="mt-1 text-gray-400">
           Auto-completes when “{source.title}”
           {sourceGoal && <> in {sourceGoal.identity}</>} is completed.{" "}
-          <button
-            onClick={() => setHook(milestone.id, null)}
-            className="underline hover:text-gray-200"
-          >
+          <button onClick={clear} className="underline hover:text-gray-200">
             Remove
           </button>
         </p>
       ) : otherGoals.length === 0 ? (
         <p className="mt-1 text-xs text-gray-400">
-          Create another goal with steps to hook into.
+          Create another goal or habit to hook into.
         </p>
       ) : (
         <div className="mt-1.5 flex flex-col gap-1.5">
@@ -627,29 +649,61 @@ function HookEditor({ milestone }: { milestone: Milestone }) {
             onChange={(e) => setGoalId(e.target.value)}
             className="rounded-md border border-gray-600 bg-navy-950 px-2 py-1.5 text-sm text-gray-100"
           >
-            <option value="">Completes when… (pick a goal)</option>
+            <option value="">Completes when… (pick a goal or habit)</option>
             {otherGoals.map((g) => (
               <option key={g.id} value={g.id}>
+                {g.structure === "habit" ? "↻ " : ""}
                 {g.identity}
               </option>
             ))}
           </select>
-          {goalId && (
-            <select
-              defaultValue=""
-              onChange={(e) => e.target.value && setHook(milestone.id, e.target.value)}
-              className="rounded-md border border-gray-600 bg-navy-950 px-2 py-1.5 text-sm text-gray-100"
-            >
-              <option value="">…this step is completed:</option>
-              {state.milestones
-                .filter((m) => m.goalId === goalId && m.id !== milestone.id)
-                .map((m) => (
+
+          {picked?.structure === "habit" ? (
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-gray-400">…is done</span>
+              <input
+                type="number"
+                min={1}
+                value={reps}
+                onChange={(e) => setReps(Number(e.target.value))}
+                className="w-20 rounded-md border border-gray-600 bg-navy-950 px-2 py-1.5 text-sm text-gray-100"
+              />
+              <span className="shrink-0 text-gray-400">times</span>
+              <button
+                onClick={() => {
+                  setHabitHook(milestone.id, picked.id, reps);
+                  setGoalId("");
+                }}
+                className="shrink-0 rounded-md bg-gold-500 px-3 py-1.5 text-sm font-medium text-ongold hover:bg-gold-400"
+              >
+                Hook
+              </button>
+            </div>
+          ) : picked ? (
+            pickedSteps.length === 0 ? (
+              <p className="text-xs text-gray-400">
+                “{picked.identity}” has no steps yet — add one to hook into it.
+              </p>
+            ) : (
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setHook(milestone.id, e.target.value);
+                    setGoalId("");
+                  }
+                }}
+                className="rounded-md border border-gray-600 bg-navy-950 px-2 py-1.5 text-sm text-gray-100"
+              >
+                <option value="">…this step is completed:</option>
+                {pickedSteps.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.title}
                   </option>
                 ))}
-            </select>
-          )}
+              </select>
+            )
+          ) : null}
         </div>
       )}
     </div>
@@ -940,7 +994,7 @@ function MachineView({ goal }: { goal: Goal }) {
                 )}
                 <text
                   x={p.x}
-                  y={p.y - (m.loopTarget || m.hookSourceId ? 4 : 0)}
+                  y={p.y - (m.loopTarget || m.hookSourceId || m.hookGoalId ? 4 : 0)}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fontSize={12.5}
@@ -954,7 +1008,7 @@ function MachineView({ goal }: { goal: Goal }) {
                 >
                   {m.title.length > 17 ? `${m.title.slice(0, 16)}…` : m.title}
                 </text>
-                {(m.loopTarget || m.hookSourceId) && (
+                {(m.loopTarget || m.hookSourceId || m.hookGoalId) && (
                   <text
                     x={p.x}
                     y={p.y + 13}
@@ -963,8 +1017,8 @@ function MachineView({ goal }: { goal: Goal }) {
                     className={completed ? "fill-ongold" : "fill-gold-400"}
                   >
                     {m.loopTarget ? `↻ ${m.loopCount}/${m.loopTarget}` : ""}
-                    {m.loopTarget && m.hookSourceId ? " " : ""}
-                    {m.hookSourceId ? "⚡" : ""}
+                    {m.loopTarget && (m.hookSourceId || m.hookGoalId) ? " " : ""}
+                    {m.hookSourceId || m.hookGoalId ? "⚡" : ""}
                   </text>
                 )}
               </g>

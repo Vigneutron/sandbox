@@ -42,6 +42,9 @@ export interface Milestone {
   loopLast: string | null;
   /** Pro hooks: auto-completes when this other milestone completes */
   hookSourceId: string | null;
+  /** Pro hooks: auto-completes when this habit goal reaches hookTarget completions */
+  hookGoalId: string | null;
+  hookTarget: number | null;
   completedAt: string | null;
   createdAt: string;
 }
